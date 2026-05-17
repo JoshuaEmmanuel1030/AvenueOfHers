@@ -44,7 +44,7 @@ export function FinancialsPage() {
   useEffect(() => { fetchSales(); }, []);
 
   const totalRevenue = sales.reduce((sum, s) => sum + s.revenue, 0);
-  const totalCOGS = sales.reduce((sum, s) => sum + (s.product_variants?.cost_price ?? 0) * s.qty, 0);
+  const totalCOGS = sales.reduce((sum, s) => sum + s.cost_price_at_sale * s.qty, 0);
   const grossProfit = totalRevenue - totalCOGS;
   const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 

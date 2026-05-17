@@ -73,18 +73,16 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
 
     setLoading(true);
     try {
-      const { error: saleError } = await supabase
-        .from('sales')
-        .insert([{ variant_id: selectedVariantId, qty, platform, sale_date: saleDate, revenue }]);
+      const { error } = await supabase.rpc('log_sale', {
+        p_variant_id: selectedVariantId,
+        p_qty: qty,
+        p_platform: platform,
+        p_sale_date: saleDate,
+        p_revenue: revenue,
+        p_cost_price_at_sale: selectedVariant!.cost_price,
+      });
 
-      if (saleError) throw saleError;
-
-      const { error: stockError } = await supabase
-        .from('product_variants')
-        .update({ stock_qty: selectedVariant!.stock_qty - qty })
-        .eq('id', selectedVariantId);
-
-      if (stockError) throw stockError;
+      if (error) throw error;
 
       toast.success('Sale logged successfully!');
       onSuccess();

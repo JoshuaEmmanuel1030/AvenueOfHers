@@ -2,13 +2,18 @@ import React, { useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { InventoryPage } from '@/pages/Inventory';
 import { FinancialsPage } from '@/pages/Financials';
+import { StockHistoryPage } from '@/pages/StockHistory';
+import { InsightsPage } from '@/pages/Insights';
+import { KPIPage } from '@/pages/KPI';
 import { Toaster } from '@/components/ui/sonner';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
+type Tab = 'inventory' | 'stock-history' | 'insights' | 'financials' | 'kpi';
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'financials'>('inventory');
+  const [activeTab, setActiveTab] = useState<Tab>('inventory');
 
   if (!isSupabaseConfigured) {
     return (
@@ -39,7 +44,11 @@ export default function App() {
       
       <main className="flex-1 overflow-y-auto bg-background">
         <div className="max-w-7xl mx-auto px-8 py-10 min-h-full">
-          {activeTab === 'inventory' ? <InventoryPage /> : <FinancialsPage />}
+          {activeTab === 'inventory' && <InventoryPage />}
+          {activeTab === 'financials' && <FinancialsPage />}
+          {activeTab === 'stock-history' && <StockHistoryPage />}
+          {activeTab === 'insights' && <InsightsPage />}
+          {activeTab === 'kpi' && <KPIPage />}
         </div>
       </main>
 

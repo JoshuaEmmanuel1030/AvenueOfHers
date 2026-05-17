@@ -42,6 +42,17 @@ CREATE TABLE public.sales (
 );
 
 -- RLS
+-- Stock movement audit log
+CREATE TABLE public.stock_movements (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    variant_id UUID REFERENCES public.product_variants(id) ON DELETE CASCADE NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('in', 'out')),
+    qty INTEGER NOT NULL,
+    platform TEXT CHECK (platform IN ('Shopee', 'TikTok', 'Instagram', 'Manual')),
+    note TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
@@ -49,3 +60,33 @@ ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public full access on products" ON public.products FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on product_variants" ON public.product_variants FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public full access on stock_movements" ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
+
+-- Atomic sale logging: inserts sale + decrements stock in one transaction
+CREATE OR REPLACE FUNCTION log_sale(
+  p_variant_id UUID, p_qty INTEGER, p_platform TEXT,
+  p_sale_date DATE, p_revenue NUMERIC, p_cost_price_at_sale NUMERIC
+)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  INSERT INTO public.sales (variant_id, qty, platform, sale_date, revenue, cost_price_at_sale)
+  VALUES (p_variant_id, p_qty, p_platform, p_sale_date, p_revenue, p_cost_price_at_sale);
+  UPDATE public.product_variants SET stock_qty = stock_qty - p_qty WHERE id = p_variant_id;
+END;
+$$;
+
+-- Atomic stock adjustment: inserts movement + updates stock in one transaction
+CREATE OR REPLACE FUNCTION adjust_stock(
+  p_variant_id UUID, p_type TEXT, p_qty INTEGER, p_platform TEXT, p_note TEXT
+)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  INSERT INTO public.stock_movements (variant_id, type, qty, platform, note)
+  VALUES (p_variant_id, p_type, p_qty, p_platform, p_note);
+  IF p_type = 'in' THEN
+    UPDATE public.product_variants SET stock_qty = stock_qty + p_qty WHERE id = p_variant_id;
+  ELSE
+    UPDATE public.product_variants SET stock_qty = stock_qty - p_qty WHERE id = p_variant_id;
+  END IF;
+END;
+$$;

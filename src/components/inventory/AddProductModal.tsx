@@ -11,27 +11,43 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { parseSupabaseError } from '@/lib/errors';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, RefreshCw } from 'lucide-react';
+
+const withCommas = (val: string) => {
+  const digits = val.replace(/\D/g, '');
+  return digits ? Number(digits).toLocaleString('en-US') : '';
+};
+const stripCommas = (val: string) => val.replace(/,/g, '');
+
+const generateSku = (productName: string, color: string, size: string, index: number): string => {
+  const p = productName.replace(/\s+/g, '').slice(0, 3).toUpperCase();
+  const n = String(index + 1).padStart(3, '0');
+  const c = color.replace(/\s+/g, '').slice(0, 3).toUpperCase();
+  const s = size.toUpperCase();
+  if (!p && !c && !s) return '';
+  return [p, n, c, s].filter(Boolean).join('-');
+};
 
 interface VariantRow {
   size: string;
   color: string;
   sku: string;
-  cost_price: number;
-  sell_price: number;
-  stock_qty: number;
-  reorder_threshold: number;
+  cost_price: string;
+  sell_price: string;
+  stock_qty: string;
+  reorder_threshold: string;
 }
 
 const emptyVariant = (): VariantRow => ({
   size: '',
   color: '',
   sku: '',
-  cost_price: 0,
-  sell_price: 0,
-  stock_qty: 0,
-  reorder_threshold: 5,
+  cost_price: '',
+  sell_price: '',
+  stock_qty: '',
+  reorder_threshold: '5',
 });
 
 interface AddProductModalProps {
@@ -46,8 +62,29 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
   const [category, setCategory] = useState('');
   const [variants, setVariants] = useState<VariantRow[]>([emptyVariant()]);
 
-  const updateVariant = (index: number, field: keyof VariantRow, value: string | number) => {
-    setVariants(prev => prev.map((v, i) => i === index ? { ...v, [field]: value } : v));
+  const updateVariant = (index: number, field: keyof VariantRow, value: string) => {
+    setVariants(prev => prev.map((v, i) => {
+      if (i !== index) return v;
+      const updated = { ...v, [field]: value };
+      // Auto-fill SKU when size or color changes and SKU is still empty
+      if ((field === 'size' || field === 'color') && !v.sku) {
+        const newSize = field === 'size' ? value : v.size;
+        const newColor = field === 'color' ? value : v.color;
+        updated.sku = generateSku(productName, newColor, newSize, index);
+      }
+      return updated;
+    }));
+  };
+
+  const regenerateSku = (index: number) => {
+    const v = variants[index];
+    const sku = generateSku(productName, v.color, v.size, index);
+    setVariants(prev => prev.map((row, i) => i === index ? { ...row, sku } : row));
+  };
+
+  const applyToAll = (field: keyof VariantRow, sourceIndex: number) => {
+    const value = variants[sourceIndex][field];
+    setVariants(prev => prev.map(v => ({ ...v, [field]: value })));
   };
 
   const addVariant = () => setVariants(prev => [...prev, emptyVariant()]);
@@ -59,6 +96,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (variants.some(v => !v.size || !v.color || !v.sku)) {
       toast.error('Each variant must have a size, color, and SKU.');
       return;
@@ -76,7 +114,14 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
 
       const { error: variantError } = await supabase
         .from('product_variants')
-        .insert(variants.map(v => ({ ...v, product_id: product.id })));
+        .insert(variants.map(v => ({
+          ...v,
+          product_id: product.id,
+          cost_price: parseFloat(stripCommas(v.cost_price)) || 0,
+          sell_price: parseFloat(stripCommas(v.sell_price)) || 0,
+          stock_qty: parseInt(v.stock_qty) || 0,
+          reorder_threshold: parseInt(v.reorder_threshold) || 5,
+        })));
 
       if (variantError) throw variantError;
 
@@ -84,7 +129,7 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
       onSuccess();
       handleClose();
     } catch (error: any) {
-      toast.error('Failed to add product: ' + error.message);
+      toast.error(parseSupabaseError(error));
     } finally {
       setLoading(false);
     }
@@ -115,13 +160,15 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
               <Input
                 value={productName}
                 onChange={e => setProductName(e.target.value)}
-                placeholder="e.g. Floral Midi Dress"
+                placeholder="e.g. IBIZA Skirt"
                 required
                 className="h-10 border-border"
               />
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Category <span className="text-slate-300 normal-case font-normal">(optional)</span></Label>
+              <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Category <span className="text-slate-300 normal-case font-normal">(optional)</span>
+              </Label>
               <Input
                 value={category}
                 onChange={e => setCategory(e.target.value)}
@@ -152,33 +199,110 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
                     )}
                   </div>
                   <div className="grid grid-cols-3 gap-3">
+                    {/* Size */}
                     <div className="space-y-1">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Size</Label>
-                      <Input value={v.size} onChange={e => updateVariant(i, 'size', e.target.value)} placeholder="S / M / L" required className="h-9 border-border bg-white text-sm" />
+                      <Input
+                        value={v.size}
+                        onChange={e => updateVariant(i, 'size', e.target.value)}
+                        placeholder="S / M / L"
+                        required
+                        className="h-9 border-border bg-white text-sm"
+                      />
                     </div>
+                    {/* Color */}
                     <div className="space-y-1">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Color</Label>
-                      <Input value={v.color} onChange={e => updateVariant(i, 'color', e.target.value)} placeholder="Black" required className="h-9 border-border bg-white text-sm" />
+                      <Input
+                        value={v.color}
+                        onChange={e => updateVariant(i, 'color', e.target.value)}
+                        placeholder="Mint"
+                        required
+                        className="h-9 border-border bg-white text-sm"
+                      />
                     </div>
+                    {/* SKU */}
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">SKU</Label>
-                      <Input value={v.sku} onChange={e => updateVariant(i, 'sku', e.target.value)} placeholder="AH-001" required className="h-9 border-border bg-white text-sm font-mono" />
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">SKU</Label>
+                        <button
+                          type="button"
+                          onClick={() => regenerateSku(i)}
+                          title="Regenerate SKU"
+                          className="text-slate-400 hover:text-primary transition-colors"
+                        >
+                          <RefreshCw size={11} />
+                        </button>
+                      </div>
+                      <Input
+                        value={v.sku}
+                        onChange={e => updateVariant(i, 'sku', e.target.value)}
+                        placeholder="Auto-generated"
+                        required
+                        className="h-9 border-border bg-white text-sm font-mono"
+                      />
                     </div>
+                    {/* Cost */}
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cost (IDR)</Label>
-                      <Input type="number" value={v.cost_price} onChange={e => updateVariant(i, 'cost_price', parseFloat(e.target.value) || 0)} required className="h-9 border-border bg-white text-sm" />
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cost (IDR)</Label>
+                        {variants.length > 1 && v.cost_price && (
+                          <button type="button" onClick={() => applyToAll('cost_price', i)} className="text-[10px] text-primary hover:underline font-medium">
+                            Apply to all
+                          </button>
+                        )}
+                      </div>
+                      <Input
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={withCommas(v.cost_price)}
+                        onChange={e => updateVariant(i, 'cost_price', stripCommas(e.target.value))}
+                        required
+                        className="h-9 border-border bg-white text-sm"
+                      />
                     </div>
+                    {/* Sell Price */}
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sell Price (IDR)</Label>
-                      <Input type="number" value={v.sell_price} onChange={e => updateVariant(i, 'sell_price', parseFloat(e.target.value) || 0)} required className="h-9 border-border bg-white text-sm" />
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sell Price (IDR)</Label>
+                        {variants.length > 1 && v.sell_price && (
+                          <button type="button" onClick={() => applyToAll('sell_price', i)} className="text-[10px] text-primary hover:underline font-medium">
+                            Apply to all
+                          </button>
+                        )}
+                      </div>
+                      <Input
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={withCommas(v.sell_price)}
+                        onChange={e => updateVariant(i, 'sell_price', stripCommas(e.target.value))}
+                        required
+                        className="h-9 border-border bg-white text-sm"
+                      />
                     </div>
+                    {/* Stock */}
                     <div className="space-y-1">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Initial Stock</Label>
-                      <Input type="number" value={v.stock_qty} onChange={e => updateVariant(i, 'stock_qty', parseInt(e.target.value) || 0)} required className="h-9 border-border bg-white text-sm" />
+                      <Input
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={v.stock_qty}
+                        onChange={e => updateVariant(i, 'stock_qty', e.target.value)}
+                        required
+                        className="h-9 border-border bg-white text-sm"
+                      />
                     </div>
+                    {/* Reorder */}
                     <div className="space-y-1">
                       <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Reorder At</Label>
-                      <Input type="number" value={v.reorder_threshold} onChange={e => updateVariant(i, 'reorder_threshold', parseInt(e.target.value) || 5)} required className="h-9 border-border bg-white text-sm" />
+                      <Input
+                        inputMode="numeric"
+                        placeholder="5"
+                        value={v.reorder_threshold}
+                        onChange={e => updateVariant(i, 'reorder_threshold', e.target.value)}
+                        required
+                        className="h-9 border-border bg-white text-sm"
+                      />
                     </div>
                   </div>
                 </div>

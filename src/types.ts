@@ -31,6 +31,7 @@ export interface Sale {
   platform: 'Shopee' | 'TikTok' | 'Other';
   sale_date: string;
   revenue: number;
+  cost_price_at_sale: number;
   created_at: string;
 }
 
@@ -39,3 +40,45 @@ export type SaleWithVariant = Sale & {
     products: Product;
   };
 };
+
+export interface StockMovement {
+  id: string;
+  variant_id: string;
+  type: 'in' | 'out';
+  qty: number;
+  platform: 'Shopee' | 'TikTok' | 'Instagram' | 'Manual' | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string | null;
+  avatar_color: string;
+  created_at: string;
+}
+
+export type TaskStatus = 'pending' | 'approved' | 'review' | 'done';
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  amount: number | null;
+  due_date: string | null;
+  assigned_to: string | null;
+  created_at: string;
+}
+
+export type TaskWithMember = Task & {
+  team_members: TeamMember | null;
+};
+
+export interface MonthlyTarget {
+  id: string;
+  year: number;
+  month: number;
+  revenue_target: number;
+}
