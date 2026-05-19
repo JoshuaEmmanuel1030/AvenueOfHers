@@ -12,6 +12,12 @@ interface SidebarProps {
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const inventoryActive = activeTab === 'inventory' || activeTab === 'stock-history' || activeTab === 'insights';
+  const [inventoryExpanded, setInventoryExpanded] = React.useState(inventoryActive);
+
+  // Auto-expand when navigating to an inventory tab from outside
+  React.useEffect(() => {
+    if (inventoryActive) setInventoryExpanded(true);
+  }, [inventoryActive]);
 
   return (
     <aside className="w-64 bg-white border-r border-border h-screen flex flex-col shadow-sm">
@@ -30,14 +36,21 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
                 ? 'bg-secondary text-primary border-primary'
                 : 'text-slate-500 hover:text-primary hover:bg-slate-50 border-transparent'
             )}
-            onClick={() => onTabChange('inventory')}
+            onClick={() => {
+              if (inventoryActive) {
+                setInventoryExpanded(e => !e);
+              } else {
+                setInventoryExpanded(true);
+                onTabChange('inventory');
+              }
+            }}
           >
             <Package size={20} className="mr-3" />
             <span className="flex-1 text-left">Inventory</span>
-            <ChevronDown size={14} className={cn('transition-transform', inventoryActive && 'rotate-180')} />
+            <ChevronDown size={14} className={cn('transition-transform', inventoryExpanded && 'rotate-180')} />
           </button>
 
-          {inventoryActive && (
+          {inventoryExpanded && (
             <div className="ml-6 border-l border-border">
               <SubItem
                 label="Products"
