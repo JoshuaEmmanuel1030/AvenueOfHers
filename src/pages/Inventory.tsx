@@ -6,13 +6,14 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle } from 'lucide-react';
+import { Plus, Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { AddProductModal } from '@/components/inventory/AddProductModal';
 import { AddVariantModal } from '@/components/inventory/AddVariantModal';
 import { EditVariantModal } from '@/components/inventory/EditVariantModal';
 import { StockAdjustModal } from '@/components/inventory/StockAdjustModal';
+import { BulkStockModal } from '@/components/inventory/BulkStockModal';
 import { cn } from '@/lib/utils';
 
 const formatIDR = (amount: number) =>
@@ -35,6 +36,8 @@ export function InventoryPage() {
   const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
   const [adjustingVariant, setAdjustingVariant] = useState<FlatVariant | null>(null);
   const [adjustType, setAdjustType] = useState<'in' | 'out'>('in');
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkType, setBulkType] = useState<'in' | 'out'>('out');
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -80,6 +83,14 @@ export function InventoryPage() {
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={fetchProducts} disabled={loading} className="border-border">
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-border font-medium"
+            onClick={() => { setBulkType('out'); setBulkOpen(true); }}
+          >
+            <Layers size={15} /> Bulk Adjust
           </Button>
           <Button size="sm" className="gap-2 bg-primary text-white hover:bg-primary/90 font-medium shadow-sm" onClick={() => setIsAddOpen(true)}>
             <Plus size={18} /> Add Product
@@ -204,6 +215,13 @@ export function InventoryPage() {
         </div>
       </div>
 
+      <BulkStockModal
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onSuccess={fetchProducts}
+        products={products}
+        initialType={bulkType}
+      />
       <AddProductModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={fetchProducts} />
       <AddVariantModal
         product={addVariantProduct?.product ?? null}
