@@ -330,20 +330,18 @@ function BulkRowItem({ row, allVariants, usedVariantIds, onChange, onRemove, can
     <div className="grid grid-cols-[minmax(0,2fr)_72px_minmax(0,1.5fr)_32px] gap-2 items-center">
       {/* Variant combobox */}
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            className={cn(
-              'h-9 w-full flex items-center justify-between px-3 rounded-md border border-border bg-white text-sm hover:border-slate-300 transition-colors',
-              !selected && 'text-slate-400'
-            )}
-          >
-            <span className="truncate">
-              {selected
-                ? `${selected.productName} · ${selected.size} / ${selected.color}`
-                : 'Search variant...'}
-            </span>
-            <ChevronsUpDown size={13} className="text-slate-400 flex-shrink-0 ml-1" />
-          </button>
+        <PopoverTrigger
+          className={cn(
+            'h-9 w-full flex items-center justify-between px-3 rounded-md border border-border bg-white text-sm hover:border-slate-300 transition-colors text-left',
+            !selected && 'text-slate-400'
+          )}
+        >
+          <span className="truncate">
+            {selected
+              ? `${selected.productName} · ${selected.size} / ${selected.color}`
+              : 'Search variant...'}
+          </span>
+          <ChevronsUpDown size={13} className="text-slate-400 flex-shrink-0 ml-1" />
         </PopoverTrigger>
         <PopoverContent className="w-72 p-0" align="start">
           <Command>
