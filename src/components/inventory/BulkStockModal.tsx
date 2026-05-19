@@ -38,6 +38,7 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
   const [type, setType] = useState<'in' | 'out'>(initialType);
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [platform, setPlatform] = useState('Shopee');
+  const [supplier, setSupplier] = useState('');
   const [rows, setRows] = useState<BulkRow[]>([newRow()]);
   const [loading, setLoading] = useState(false);
 
@@ -78,13 +79,14 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
     if (validRows.length === 0) { toast.error('Add at least one variant with a quantity.'); return; }
     setLoading(true);
     try {
+      const platformValue = type === 'in' ? (supplier.trim() || null) : platform;
       await Promise.all(
         validRows.map(row =>
           supabase.rpc('adjust_stock', {
             p_variant_id: row.variantId,
             p_type: type,
             p_qty: parseInt(row.qty),
-            p_platform: platform,
+            p_platform: platformValue,
             p_note: row.note || null,
           })
         )
@@ -156,17 +158,29 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Platform</Label>
-                <Select value={platform} onValueChange={setPlatform}>
-                  <SelectTrigger className="h-9 border-border text-sm w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {type === 'in' ? (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Supplier <span className="normal-case font-normal text-slate-300">(optional)</span></Label>
+                  <Input
+                    placeholder="e.g. PT Maju Jaya"
+                    value={supplier}
+                    onChange={e => setSupplier(e.target.value)}
+                    className="h-9 border-border text-sm w-44"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Platform</Label>
+                  <Select value={platform} onValueChange={setPlatform}>
+                    <SelectTrigger className="h-9 border-border text-sm w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {/* Column headers */}
@@ -228,7 +242,9 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                   {type === 'in' ? <ArrowUpCircle size={10} /> : <ArrowDownCircle size={10} />}
                   {type === 'in' ? 'Stock In' : 'Stock Out'}
                 </div>
-                <p className="text-[10px] text-slate-400">{platform} · {format(new Date(date), 'MMM d, yyyy')}</p>
+                <p className="text-[10px] text-slate-400">
+                  {type === 'in' ? (supplier.trim() || 'No supplier') : platform} · {format(new Date(date), 'MMM d, yyyy')}
+                </p>
               </div>
 
               <div className="border-t border-border pt-3">
