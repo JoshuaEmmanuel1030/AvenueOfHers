@@ -17,10 +17,30 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from '@/components/ui/popover';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Loader2, Calendar } from 'lucide-react';
+import { Loader2, Calendar, ChevronsUpDown, Check } from 'lucide-react';
 import { ProductWithVariants, ProductVariant } from '@/types';
+import { cn } from '@/lib/utils';
+
+const withCommas = (val: string) => {
+  const digits = val.replace(/\D/g, '');
+  return digits ? Number(digits).toLocaleString('en-US') : '';
+};
+const stripCommas = (val: string) => val.replace(/,/g, '');
 
 interface LogSaleModalProps {
   isOpen: boolean;
@@ -31,46 +51,84 @@ interface LogSaleModalProps {
 const formatIDR = (amount: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
+type FlatOption = {
+  variantId: string;
+  productName: string;
+  size: string;
+  color: string;
+  sku: string;
+  stock_qty: number;
+  sell_price: number;
+  cost_price: number;
+  label: string;
+};
+
 export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) {
   const [loading, setLoading] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
+  const [comboOpen, setComboOpen] = useState(false);
   const [qty, setQty] = useState(1);
   const [platform, setPlatform] = useState<'Shopee' | 'TikTok' | 'Other'>('Shopee');
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [overridePriceStr, setOverridePriceStr] = useState('');
 
   useEffect(() => {
     if (isOpen) fetchProducts();
   }, [isOpen]);
 
   const fetchProducts = async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*, product_variants(*)')
-      .eq('is_archived', false)
-      .order('name');
-    if (!error) setProducts((data as ProductWithVariants[]) || []);
+    setProductsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*, product_variants(*)')
+        .eq('is_archived', false)
+        .order('name');
+      if (error) throw error;
+      setProducts((data as ProductWithVariants[]) || []);
+    } catch {
+      toast.error('Failed to load products.');
+    } finally {
+      setProductsLoading(false);
+    }
   };
 
-  const selectedProduct = products.find(p => p.id === selectedProductId);
-  const availableVariants = selectedProduct?.product_variants.filter(v => v.stock_qty > 0) ?? [];
-  const selectedVariant: ProductVariant | undefined = selectedProduct?.product_variants.find(v => v.id === selectedVariantId);
-  const revenue = (selectedVariant?.sell_price ?? 0) * qty;
+  const flatOptions: FlatOption[] = products.flatMap(p =>
+    p.product_variants.map(v => ({
+      variantId: v.id,
+      productName: p.name,
+      size: v.size,
+      color: v.color,
+      sku: v.sku,
+      stock_qty: v.stock_qty,
+      sell_price: v.sell_price,
+      cost_price: v.cost_price,
+      label: `${p.name} · ${v.size} / ${v.color}`,
+    }))
+  );
 
-  const handleProductChange = (val: string) => {
-    setSelectedProductId(val);
-    setSelectedVariantId('');
-    setQty(1);
-  };
+  const selectedOption = flatOptions.find(o => o.variantId === selectedVariantId);
+
+  useEffect(() => {
+    if (selectedOption) {
+      setOverridePriceStr(String(selectedOption.sell_price));
+    } else {
+      setOverridePriceStr('');
+    }
+  }, [selectedVariantId]);
+
+  const overridePrice = parseFloat(stripCommas(overridePriceStr)) || 0;
+  const revenue = overridePrice * qty;
+  const isPriceOverridden = selectedOption && overridePrice !== selectedOption.sell_price;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedVariantId) {
+    if (!selectedVariantId || !selectedOption) {
       toast.error('Please select a variant.');
       return;
     }
-
     setLoading(true);
     try {
       const { error } = await supabase.rpc('log_sale', {
@@ -79,7 +137,7 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
         p_platform: platform,
         p_sale_date: saleDate,
         p_revenue: revenue,
-        p_cost_price_at_sale: selectedVariant!.cost_price,
+        p_cost_price_at_sale: selectedOption.cost_price,
       });
 
       if (error) throw error;
@@ -95,11 +153,12 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
   };
 
   const handleClose = () => {
-    setSelectedProductId('');
     setSelectedVariantId('');
+    setComboOpen(false);
     setQty(1);
     setPlatform('Shopee');
     setSaleDate(new Date().toISOString().split('T')[0]);
+    setOverridePriceStr('');
     onClose();
   };
 
@@ -114,42 +173,61 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 pt-2">
-          {/* Product */}
+          {/* Flat variant combobox */}
           <div className="space-y-1.5">
-            <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Product</Label>
-            <Select value={selectedProductId} onValueChange={handleProductChange}>
-              <SelectTrigger className="h-10 border-border">
-                <SelectValue placeholder="Select a product" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map(p => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Variant */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Variant</Label>
-            <Select value={selectedVariantId} onValueChange={setSelectedVariantId} disabled={!selectedProductId}>
-              <SelectTrigger className="h-10 border-border">
-                <SelectValue placeholder={selectedProductId ? 'Select size / color' : 'Select a product first'} />
-              </SelectTrigger>
-              <SelectContent>
-                {availableVariants.map(v => (
-                  <SelectItem key={v.id} value={v.id}>
-                    <div className="flex flex-col items-start py-0.5">
-                      <span className="font-medium text-sm">{v.size} / {v.color}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">SKU: {v.sku} · Stock: {v.stock_qty} · {formatIDR(v.sell_price)}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-                {selectedProductId && availableVariants.length === 0 && (
-                  <div className="px-3 py-4 text-sm text-slate-400 text-center">No variants in stock</div>
-                )}
-              </SelectContent>
-            </Select>
+            <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Product / Variant</Label>
+            <Popover open={comboOpen} onOpenChange={setComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  disabled={productsLoading}
+                  className="w-full h-10 justify-between border-border font-normal text-sm"
+                >
+                  {productsLoading
+                    ? 'Loading…'
+                    : selectedOption
+                      ? selectedOption.label
+                      : 'Search product or variant…'}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[420px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search by name, size, color, or SKU…" className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>No variants found.</CommandEmpty>
+                    <CommandGroup>
+                      {flatOptions.map(opt => (
+                        <CommandItem
+                          key={opt.variantId}
+                          value={`${opt.productName} ${opt.size} ${opt.color} ${opt.sku}`}
+                          onSelect={() => {
+                            setSelectedVariantId(opt.variantId);
+                            setQty(1);
+                            setComboOpen(false);
+                          }}
+                          className={cn(opt.stock_qty === 0 && 'opacity-50')}
+                        >
+                          <Check
+                            className={cn('mr-2 h-4 w-4 shrink-0', selectedVariantId === opt.variantId ? 'opacity-100' : 'opacity-0')}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{opt.productName}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {opt.size} / {opt.color} · {opt.sku}
+                              {opt.stock_qty === 0 ? ' · Out of stock' : ` · ${opt.stock_qty} left`}
+                            </p>
+                          </div>
+                          <span className="ml-3 text-xs text-slate-500 shrink-0">{formatIDR(opt.sell_price)}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -159,7 +237,6 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
               <Input
                 type="number"
                 min={1}
-                max={selectedVariant?.stock_qty ?? 100}
                 value={qty}
                 onChange={e => setQty(parseInt(e.target.value) || 1)}
                 required
@@ -190,6 +267,7 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
               <Input
                 type="date"
                 value={saleDate}
+                max={new Date().toISOString().split('T')[0]}
                 onChange={e => setSaleDate(e.target.value)}
                 required
                 className="h-10 pl-10 border-border"
@@ -197,10 +275,41 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
             </div>
           </div>
 
-          {/* Revenue preview */}
-          <div className="bg-slate-50 p-4 rounded-lg border border-border">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Revenue</p>
-            <p className="text-xl font-bold text-slate-800 tracking-tight">{formatIDR(revenue)}</p>
+          {/* Revenue — editable unit price + computed total */}
+          <div className="bg-slate-50 p-4 rounded-lg border border-border space-y-3">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Price per unit (IDR)
+                </Label>
+                {isPriceOverridden && (
+                  <button
+                    type="button"
+                    onClick={() => setOverridePriceStr(String(selectedOption!.sell_price))}
+                    className="text-[10px] text-primary hover:underline font-medium"
+                  >
+                    Reset to list price
+                  </button>
+                )}
+              </div>
+              <Input
+                inputMode="numeric"
+                value={withCommas(overridePriceStr)}
+                onChange={e => setOverridePriceStr(stripCommas(e.target.value))}
+                disabled={!selectedOption}
+                placeholder="Select a variant first"
+                className="h-10 border-border bg-white"
+              />
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Revenue</p>
+              <p className="text-xl font-bold text-slate-800 tracking-tight">{formatIDR(revenue)}</p>
+              {isPriceOverridden && (
+                <p className="text-[10px] text-amber-500 mt-0.5">
+                  Custom price · list price is {formatIDR(selectedOption!.sell_price)}
+                </p>
+              )}
+            </div>
           </div>
 
           <DialogFooter className="pt-2">

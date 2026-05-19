@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
@@ -15,12 +15,14 @@ import { LowStockAlertCard } from '@/components/insights/LowStockAlertCard';
 import { BestSellersCard } from '@/components/insights/BestSellersCard';
 import { PlatformBreakdownCard } from '@/components/insights/PlatformBreakdownCard';
 import { StockMovementTrendCard } from '@/components/insights/StockMovementTrendCard';
+import { BulkStockModal } from '@/components/inventory/BulkStockModal';
 
 export function InsightsPage() {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [sales, setSales] = useState<SaleWithVariant[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [restockOpen, setRestockOpen] = useState(false);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -47,13 +49,16 @@ export function InsightsPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  const totalVariants = products.reduce((s, p) => s + p.product_variants.length, 0);
-  const stockHealth = getStockHealth(products);
-  const inventoryValue = getInventoryValue(products);
-  const lowStockItems = getLowStockItems(products);
-  const bestSellers = getBestSellers(sales);
-  const platformData = getPlatformBreakdown(sales);
-  const trendData = getStockTrend(movements);
+  const totalVariants = useMemo(
+    () => products.reduce((s, p) => s + p.product_variants.length, 0),
+    [products]
+  );
+  const stockHealth = useMemo(() => getStockHealth(products), [products]);
+  const inventoryValue = useMemo(() => getInventoryValue(products), [products]);
+  const lowStockItems = useMemo(() => getLowStockItems(products), [products]);
+  const bestSellers = useMemo(() => getBestSellers(sales), [sales]);
+  const platformData = useMemo(() => getPlatformBreakdown(sales), [sales]);
+  const trendData = useMemo(() => getStockTrend(movements), [movements]);
 
   return (
     <div className="space-y-8">
@@ -65,19 +70,31 @@ export function InsightsPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-32">
-          <RefreshCw className="h-8 w-8 animate-spin opacity-20" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-border shadow-sm p-5 animate-pulse">
+              <div className="h-2.5 w-24 bg-slate-100 rounded mb-4" />
+              <div className="h-36 bg-slate-100 rounded" />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           <StockHealthCard data={stockHealth} totalVariants={totalVariants} />
           <InventoryValueCard data={inventoryValue} />
-          <LowStockAlertCard items={lowStockItems} />
+          <LowStockAlertCard items={lowStockItems} onRestock={() => setRestockOpen(true)} />
           <BestSellersCard items={bestSellers} />
           <PlatformBreakdownCard data={platformData} />
           <StockMovementTrendCard data={trendData} />
         </div>
       )}
+      <BulkStockModal
+        open={restockOpen}
+        onClose={() => setRestockOpen(false)}
+        onSuccess={fetchAll}
+        products={products}
+        initialType="in"
+      />
     </div>
   );
 }

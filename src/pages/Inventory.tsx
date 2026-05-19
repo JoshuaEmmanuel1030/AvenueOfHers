@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ProductWithVariants, ProductVariant } from '@/types';
 import {
@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers } from 'lucide-react';
+import { Plus, Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { AddProductModal } from '@/components/inventory/AddProductModal';
@@ -38,6 +38,9 @@ export function InventoryPage() {
   const [adjustType, setAdjustType] = useState<'in' | 'out'>('in');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkType, setBulkType] = useState<'in' | 'out'>('out');
+  const [page, setPage] = useState(1);
+
+  const PAGE_SIZE = 50;
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -59,22 +62,30 @@ export function InventoryPage() {
 
   useEffect(() => { fetchProducts(); }, []);
 
-  const allVariants: FlatVariant[] = products.flatMap(p =>
-    p.product_variants.map(v => ({ ...v, productName: p.name, category: p.category }))
+  const allVariants: FlatVariant[] = useMemo(
+    () => products.flatMap(p => p.product_variants.map(v => ({ ...v, productName: p.name, category: p.category }))),
+    [products]
   );
 
-  const filtered = searchQuery
-    ? allVariants.filter(v =>
-        v.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.color.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        v.size.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : allVariants;
+  const filtered = useMemo(() => {
+    if (!searchQuery) return allVariants;
+    const q = searchQuery.toLowerCase();
+    return allVariants.filter(v =>
+      v.productName.toLowerCase().includes(q) ||
+      v.sku.toLowerCase().includes(q) ||
+      v.color.toLowerCase().includes(q) ||
+      v.size.toLowerCase().includes(q)
+    );
+  }, [allVariants, searchQuery]);
 
-  const inStock = allVariants.filter(v => v.stock_qty > v.reorder_threshold).length;
-  const lowStock = allVariants.filter(v => v.stock_qty > 0 && v.stock_qty <= v.reorder_threshold).length;
-  const outOfStock = allVariants.filter(v => v.stock_qty === 0).length;
+  // Reset to page 1 whenever the filtered set changes
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages);
+  const pagedVariants = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+
+  const inStock = useMemo(() => allVariants.filter(v => v.stock_qty > v.reorder_threshold).length, [allVariants]);
+  const lowStock = useMemo(() => allVariants.filter(v => v.stock_qty > 0 && v.stock_qty <= v.reorder_threshold).length, [allVariants]);
+  const outOfStock = useMemo(() => allVariants.filter(v => v.stock_qty === 0).length, [allVariants]);
 
   return (
     <div className="space-y-8">
@@ -98,7 +109,7 @@ export function InventoryPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-border shadow-sm overflow-x-auto">
         <div className="p-4 border-b bg-slate-50 flex items-center justify-between gap-4">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -106,7 +117,7 @@ export function InventoryPage() {
               placeholder="Search by name, SKU, size, or color..."
               className="pl-10 h-10 bg-white border-border"
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
             />
           </div>
           <div className="hidden lg:flex items-center gap-3">
@@ -132,11 +143,21 @@ export function InventoryPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={9} className="h-64 text-center">
-                  <RefreshCw className="h-8 w-8 animate-spin mx-auto opacity-20" />
-                </TableCell>
-              </TableRow>
+              <>
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <TableRow key={i} className="animate-pulse">
+                    <TableCell className="px-6 py-4"><div className="h-4 w-28 bg-slate-100 rounded" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-8 bg-slate-100 rounded" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-14 bg-slate-100 rounded" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-24 bg-slate-100 rounded" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-8 bg-slate-100 rounded mx-auto" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-20 bg-slate-100 rounded ml-auto" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-20 bg-slate-100 rounded ml-auto" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-5 w-16 bg-slate-100 rounded-full mx-auto" /></TableCell>
+                    <TableCell className="px-4 py-4" />
+                  </TableRow>
+                ))}
+              </>
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="h-64 text-center text-slate-400">
@@ -144,9 +165,10 @@ export function InventoryPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((v, i) => {
+              pagedVariants.map((v, i) => {
+                const globalIndex = (clampedPage - 1) * PAGE_SIZE + i;
                 const status = getStatus(v);
-                const isNewProduct = i === 0 || filtered[i - 1].productName !== v.productName;
+                const isNewProduct = globalIndex === 0 || filtered[globalIndex - 1].productName !== v.productName;
                 return (
                   <TableRow
                     key={v.id}
@@ -169,7 +191,7 @@ export function InventoryPage() {
                               const product = products.find(p => p.name === v.productName);
                               if (product) setAddVariantProduct({ product });
                             }}
-                            className="opacity-0 group-hover/product:opacity-100 p-1 rounded-md hover:bg-slate-100 transition-all text-primary"
+                            className="opacity-40 group-hover/product:opacity-100 p-1 rounded-md hover:bg-slate-100 transition-all text-primary"
                           >
                             <PlusCircle size={15} />
                           </button>
@@ -188,7 +210,7 @@ export function InventoryPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-4">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+                      <div className="flex items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity justify-end">
                         <ActionBtn title="Stock In" onClick={() => { setAdjustType('in'); setAdjustingVariant(v); }}>
                           <PackagePlus size={14} className="text-emerald-600" />
                         </ActionBtn>
@@ -207,11 +229,31 @@ export function InventoryPage() {
           </TableBody>
         </Table>
 
-        <div className="bg-slate-50 px-6 py-3 border-t border-border text-xs text-slate-400">
-          {(() => {
-            const uniqueProducts = new Set(filtered.map(v => v.productName)).size;
-            return `${filtered.length} variant${filtered.length !== 1 ? 's' : ''} across ${uniqueProducts} product${uniqueProducts !== 1 ? 's' : ''}`;
-          })()}
+        <div className="bg-slate-50 px-6 py-3 border-t border-border flex items-center justify-between text-xs text-slate-400">
+          <span>
+            {filtered.length} variant{filtered.length !== 1 ? 's' : ''} across {new Set(filtered.map(v => v.productName)).size} product{new Set(filtered.map(v => v.productName)).size !== 1 ? 's' : ''}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={clampedPage === 1}
+                className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="font-medium text-slate-500">
+                {clampedPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={clampedPage === totalPages}
+                className="p-1 rounded hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

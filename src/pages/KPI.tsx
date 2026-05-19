@@ -82,8 +82,15 @@ export function KPIPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-32">
-          <RefreshCw className="h-8 w-8 animate-spin opacity-20" />
+        <div className="space-y-5 animate-pulse">
+          <div className="bg-white rounded-xl border border-border shadow-sm p-6 h-36" />
+          <div className="grid grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-xl border border-border shadow-sm p-4 h-20" />
+            ))}
+          </div>
+          <div className="bg-white rounded-xl border border-border shadow-sm p-6 h-52" />
+          <div className="bg-white rounded-xl border border-border shadow-sm p-6 h-40" />
         </div>
       ) : (
         <div className="space-y-5">

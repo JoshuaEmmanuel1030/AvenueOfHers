@@ -126,6 +126,7 @@ export function StockAdjustModal({ variant, productName, initialType = 'in', onC
                 value={qty}
                 onChange={e => setQty(e.target.value.replace(/\D/g, ''))}
                 required
+                autoFocus
                 className="h-10 border-border"
               />
             </div>

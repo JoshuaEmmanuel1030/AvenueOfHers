@@ -123,15 +123,23 @@ export interface TrendDay {
 }
 
 export function getStockTrend(movements: StockMovement[], days = 30): TrendDay[] {
+  // Pre-index by date prefix: O(n) pass instead of O(n*m) nested filter per day
+  const byDate = new Map<string, { in: number; out: number }>();
+  for (const m of movements) {
+    const prefix = m.created_at.slice(0, 10);
+    const entry = byDate.get(prefix) ?? { in: 0, out: 0 };
+    if (m.type === 'in') entry.in += m.qty;
+    else entry.out += m.qty;
+    byDate.set(prefix, entry);
+  }
+
   const result: TrendDay[] = [];
   const now = new Date();
   for (let i = days - 1; i >= 0; i--) {
     const day = startOfDay(subDays(now, i));
-    const dayStr = format(day, 'MMM d');
     const datePrefix = format(day, 'yyyy-MM-dd');
-    const ins = movements.filter(m => m.type === 'in' && m.created_at.startsWith(datePrefix)).reduce((s, m) => s + m.qty, 0);
-    const outs = movements.filter(m => m.type === 'out' && m.created_at.startsWith(datePrefix)).reduce((s, m) => s + m.qty, 0);
-    result.push({ date: dayStr, in: ins, out: outs });
+    const dayData = byDate.get(datePrefix) ?? { in: 0, out: 0 };
+    result.push({ date: format(day, 'MMM d'), in: dayData.in, out: dayData.out });
   }
   return result;
 }

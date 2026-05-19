@@ -101,6 +101,10 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
       toast.error('Each variant must have a size, color, and SKU.');
       return;
     }
+    if (variants.some(v => !(parseFloat(stripCommas(v.sell_price)) > 0))) {
+      toast.error('Each variant must have a sell price greater than 0.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -112,18 +116,35 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
 
       if (productError) throw productError;
 
-      const { error: variantError } = await supabase
+      const parsedVariants = variants.map(v => ({
+        ...v,
+        product_id: product.id,
+        cost_price: parseFloat(stripCommas(v.cost_price)) || 0,
+        sell_price: parseFloat(stripCommas(v.sell_price)) || 0,
+        stock_qty: parseInt(v.stock_qty) || 0,
+        reorder_threshold: v.reorder_threshold.trim() === '' ? 5 : (parseInt(v.reorder_threshold) || 0),
+      }));
+
+      const { data: insertedVariants, error: variantError } = await supabase
         .from('product_variants')
-        .insert(variants.map(v => ({
-          ...v,
-          product_id: product.id,
-          cost_price: parseFloat(stripCommas(v.cost_price)) || 0,
-          sell_price: parseFloat(stripCommas(v.sell_price)) || 0,
-          stock_qty: parseInt(v.stock_qty) || 0,
-          reorder_threshold: parseInt(v.reorder_threshold) || 5,
-        })));
+        .insert(parsedVariants)
+        .select('id, stock_qty');
 
       if (variantError) throw variantError;
+
+      // Create stock_movements records for any variant with initial stock so the audit trail is complete from day one
+      const initialStockEntries = (insertedVariants ?? []).filter(v => v.stock_qty > 0);
+      if (initialStockEntries.length > 0) {
+        await supabase.from('stock_movements').insert(
+          initialStockEntries.map(v => ({
+            variant_id: v.id,
+            type: 'in',
+            qty: v.stock_qty,
+            platform: null,
+            note: 'Initial stock',
+          }))
+        );
+      }
 
       toast.success('Product added successfully!');
       onSuccess();
@@ -294,7 +315,14 @@ export function AddProductModal({ isOpen, onClose, onSuccess }: AddProductModalP
                     </div>
                     {/* Reorder */}
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Reorder At</Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Reorder At</Label>
+                        {variants.length > 1 && v.reorder_threshold && (
+                          <button type="button" onClick={() => applyToAll('reorder_threshold', i)} className="text-[10px] text-primary hover:underline font-medium">
+                            Apply to all
+                          </button>
+                        )}
+                      </div>
                       <Input
                         inputMode="numeric"
                         placeholder="5"

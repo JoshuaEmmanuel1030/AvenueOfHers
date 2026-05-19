@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '@/components/ui/dialog';
@@ -13,7 +13,6 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Loader2, ChevronsUpDown, Check, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { ProductWithVariants, ProductVariant } from '@/types';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 
 type FlatVariant = ProductVariant & { productName: string };
 
@@ -36,7 +35,6 @@ interface Props {
 
 export function BulkStockModal({ open, onClose, onSuccess, products, initialType = 'out' }: Props) {
   const [type, setType] = useState<'in' | 'out'>(initialType);
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [platform, setPlatform] = useState('Shopee');
   const [supplier, setSupplier] = useState('');
   const [rows, setRows] = useState<BulkRow[]>([newRow()]);
@@ -80,7 +78,7 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
     setLoading(true);
     try {
       const platformValue = type === 'in' ? (supplier.trim() || null) : platform;
-      await Promise.all(
+      const results = await Promise.all(
         validRows.map(row =>
           supabase.rpc('adjust_stock', {
             p_variant_id: row.variantId,
@@ -91,6 +89,8 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
           })
         )
       );
+      const firstFailed = results.find(r => r.error);
+      if (firstFailed?.error) throw firstFailed.error;
       toast.success(`${validRows.length} movement${validRows.length !== 1 ? 's' : ''} recorded · ${totalUnits} units ${type === 'in' ? 'added' : 'removed'}`);
       setRows([newRow()]);
       onSuccess();
@@ -146,16 +146,6 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                     <ArrowDownCircle size={13} /> Stock Out
                   </button>
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Date</Label>
-                <Input
-                  type="date"
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  className="h-9 border-border text-sm w-40"
-                />
               </div>
 
               {type === 'in' ? (
@@ -243,7 +233,7 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                   {type === 'in' ? 'Stock In' : 'Stock Out'}
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  {type === 'in' ? (supplier.trim() || 'No supplier') : platform} · {format(new Date(date), 'MMM d, yyyy')}
+                  {type === 'in' ? (supplier.trim() || 'No supplier') : platform}
                 </p>
               </div>
 

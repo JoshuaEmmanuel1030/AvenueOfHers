@@ -10,51 +10,97 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Plus, History, RefreshCw } from 'lucide-react';
+import { Plus, History, RefreshCw, Layers } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, startOfMonth, startOfWeek } from 'date-fns';
 import { LogSaleModal } from '@/components/financials/LogSaleModal';
+import { BulkLogSaleModal } from '@/components/financials/BulkLogSaleModal';
 import { cn } from '@/lib/utils';
+import { ProductWithVariants } from '@/types';
 
 const formatIDR = (amount: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
 export function FinancialsPage() {
   const [sales, setSales] = useState<SaleWithVariant[]>([]);
+  const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [period, setPeriod] = useState<'month' | 'week' | 'all'>('month');
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
 
-  const fetchSales = async () => {
+  const fetchAll = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('sales')
-        .select('*, product_variants(*, products(*))')
-        .order('sale_date', { ascending: false });
-
-      if (error) throw error;
-      setSales((data as any) || []);
+      const [salesRes, productsRes] = await Promise.all([
+        supabase.from('sales').select('*, product_variants(*, products(*))').order('sale_date', { ascending: false }),
+        supabase.from('products').select('*, product_variants(*)').eq('is_archived', false).order('name'),
+      ]);
+      if (salesRes.error) throw salesRes.error;
+      if (productsRes.error) throw productsRes.error;
+      setSales((salesRes.data as any) || []);
+      setProducts((productsRes.data as any) || []);
     } catch (error: any) {
-      toast.error('Failed to load sales: ' + error.message);
+      toast.error('Failed to load financials: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchSales(); }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  const totalRevenue = sales.reduce((sum, s) => sum + s.revenue, 0);
-  const totalCOGS = sales.reduce((sum, s) => sum + s.cost_price_at_sale * s.qty, 0);
+  const now = new Date();
+  const periodCutoff = period === 'month' ? startOfMonth(now) : period === 'week' ? startOfWeek(now, { weekStartsOn: 1 }) : null;
+  const periodSales = periodCutoff
+    ? sales.filter(s => new Date(s.sale_date) >= periodCutoff)
+    : sales;
+  const displayedSales = platformFilter === 'all'
+    ? periodSales
+    : periodSales.filter(s => s.platform === platformFilter);
+
+  const platformOptions = ['all', ...Array.from(new Set(periodSales.map(s => s.platform).filter(Boolean)))];
+
+  const totalRevenue = displayedSales.reduce((sum, s) => sum + s.revenue, 0);
+  const totalCOGS = displayedSales.reduce((sum, s) => sum + s.cost_price_at_sale * s.qty, 0);
   const grossProfit = totalRevenue - totalCOGS;
   const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
+  const PERIODS = [
+    { key: 'month', label: 'This Month' },
+    { key: 'week', label: 'This Week' },
+    { key: 'all', label: 'All Time' },
+  ] as const;
+
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-6 -mx-8 px-8 bg-white h-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-6 -mx-8 px-8 bg-white min-h-20 py-4">
         <h2 className="text-xl font-semibold text-slate-700">Financial Performance</h2>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={fetchSales} disabled={loading} className="border-border">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex rounded-lg border border-border overflow-hidden h-9">
+            {PERIODS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className={cn(
+                  'px-3 text-[11px] font-bold uppercase transition-colors border-r border-border last:border-r-0',
+                  period === p.key ? 'bg-primary text-white' : 'text-slate-500 hover:bg-slate-50'
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading} className="border-border">
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-border font-medium"
+            onClick={() => setIsBulkOpen(true)}
+          >
+            <Layers size={15} /> Bulk Log
           </Button>
           <Button size="sm" className="gap-2 bg-primary text-white hover:bg-primary/90 font-medium shadow-sm" onClick={() => setIsModalOpen(true)}>
             <Plus size={18} /> Log Sale
@@ -71,10 +117,30 @@ export function FinancialsPage() {
       </div>
 
       {/* Sales Log */}
-      <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
-        <div className="p-4 border-b bg-slate-50 flex items-center gap-2">
-          <History className="text-slate-400" size={18} />
-          <h3 className="font-semibold text-sm uppercase tracking-wider text-slate-500">Sales Activity Log</h3>
+      <div className="bg-white rounded-xl border border-border shadow-sm overflow-x-auto">
+        <div className="p-4 border-b bg-slate-50 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <History className="text-slate-400" size={18} />
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-slate-500">Sales Activity Log</h3>
+          </div>
+          {platformOptions.length > 2 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {platformOptions.map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPlatformFilter(p)}
+                  className={cn(
+                    'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border transition-colors',
+                    platformFilter === p
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-slate-500 border-border hover:bg-slate-100'
+                  )}
+                >
+                  {p === 'all' ? 'All Platforms' : p}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <Table>
@@ -85,26 +151,37 @@ export function FinancialsPage() {
               <TableHead className="px-6 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest h-12 text-center">Qty</TableHead>
               <TableHead className="px-6 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest h-12">Platform</TableHead>
               <TableHead className="px-6 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest h-12 text-right">Revenue</TableHead>
+              <TableHead className="px-6 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest h-12 text-right">Margin</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
+              <>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <TableRow key={i} className="animate-pulse">
+                    <TableCell className="px-6 py-4"><div className="h-4 w-24 bg-slate-100 rounded" /></TableCell>
+                    <TableCell className="px-6 py-4">
+                      <div className="h-4 w-36 bg-slate-100 rounded mb-1.5" />
+                      <div className="h-3 w-24 bg-slate-100 rounded" />
+                    </TableCell>
+                    <TableCell className="px-6 py-4"><div className="h-4 w-6 bg-slate-100 rounded mx-auto" /></TableCell>
+                    <TableCell className="px-6 py-4"><div className="h-5 w-16 bg-slate-100 rounded-full" /></TableCell>
+                    <TableCell className="px-6 py-4"><div className="h-4 w-24 bg-slate-100 rounded ml-auto" /></TableCell>
+                    <TableCell className="px-6 py-4"><div className="h-4 w-14 bg-slate-100 rounded ml-auto" /></TableCell>
+                  </TableRow>
+                ))}
+              </>
+            ) : displayedSales.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-64 text-center">
-                  <RefreshCw className="h-8 w-8 animate-spin mx-auto opacity-20" />
-                </TableCell>
-              </TableRow>
-            ) : sales.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-64 text-center text-slate-400">
+                <TableCell colSpan={6} className="h-64 text-center text-slate-400">
                   <div className="flex flex-col items-center gap-3">
                     <History size={40} className="opacity-20" />
-                    <p>No sales logged yet.</p>
+                    <p>{sales.length === 0 ? 'No sales logged yet.' : `No sales in ${PERIODS.find(p => p.key === period)?.label.toLowerCase()}.`}</p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              sales.map(sale => {
+              displayedSales.map(sale => {
                 const variant = sale.product_variants;
                 const product = variant?.products;
                 return (
@@ -131,6 +208,17 @@ export function FinancialsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="px-6 py-4 text-right font-bold text-slate-800">{formatIDR(sale.revenue)}</TableCell>
+                    <TableCell className="px-6 py-4 text-right text-sm font-medium">
+                      {(() => {
+                        const cogs = sale.cost_price_at_sale * sale.qty;
+                        const m = sale.revenue > 0 ? ((sale.revenue - cogs) / sale.revenue) * 100 : 0;
+                        return (
+                          <span className={cn(m >= 40 ? 'text-emerald-600' : m >= 20 ? 'text-amber-600' : 'text-rose-500')}>
+                            {m.toFixed(1)}%
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
                   </TableRow>
                 );
               })
@@ -139,7 +227,8 @@ export function FinancialsPage() {
         </Table>
       </div>
 
-      <LogSaleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchSales} />
+      <LogSaleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchAll} />
+      <BulkLogSaleModal open={isBulkOpen} onClose={() => setIsBulkOpen(false)} onSuccess={fetchAll} products={products} />
     </div>
   );
 }

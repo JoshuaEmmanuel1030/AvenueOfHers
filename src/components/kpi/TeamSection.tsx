@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Users, Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
@@ -15,11 +15,13 @@ interface Props {
 }
 
 export function TeamSection({ members, tasks, onAddMember, onEditMember, onRefresh }: Props) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const handleDelete = async (id: string) => {
-    if (!confirm('Remove this team member? Their tasks will become unassigned.')) return;
     const { error } = await supabase.from('team_members').delete().eq('id', id);
     if (error) toast.error(error.message);
     else { toast.success('Member removed.'); onRefresh(); }
+    setDeletingId(null);
   };
 
   return (
@@ -84,14 +86,32 @@ export function TeamSection({ members, tasks, onAddMember, onEditMember, onRefre
                     </span>
                   )}
 
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onEditMember(member)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600">
-                      <Pencil size={12} />
-                    </button>
-                    <button onClick={() => handleDelete(member.id)} className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-500">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                  {deletingId === member.id ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-slate-500">Remove?</span>
+                      <button
+                        onClick={() => handleDelete(member.id)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500 text-white hover:bg-rose-600 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(null)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded border border-border text-slate-500 hover:bg-slate-100 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => onEditMember(member)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                        <Pencil size={12} />
+                      </button>
+                      <button onClick={() => setDeletingId(member.id)} className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-500">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

@@ -61,7 +61,7 @@ export function EditVariantModal({ variant, onClose, onSuccess }: EditVariantMod
           sku: form.sku,
           cost_price: parseFloat(stripCommas(form.cost_price)) || 0,
           sell_price: parseFloat(stripCommas(form.sell_price)) || 0,
-          reorder_threshold: parseInt(form.reorder_threshold) || 5,
+          reorder_threshold: form.reorder_threshold.trim() === '' ? 5 : (parseInt(form.reorder_threshold) || 0),
         })
         .eq('id', variant.id);
 

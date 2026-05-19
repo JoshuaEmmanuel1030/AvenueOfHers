@@ -1,28 +1,37 @@
 import React from 'react';
 import { LowStockItem } from '@/lib/insights';
-import { AlertTriangle } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   items: LowStockItem[];
+  onRestock?: () => void;
 }
 
-export function LowStockAlertCard({ items }: Props) {
+export function LowStockAlertCard({ items, onRestock }: Props) {
   return (
     <div className="bg-white rounded-xl border border-border shadow-sm p-5 flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Low Stock Alerts</p>
-        {items.length > 0 && (
-          <span className="text-[10px] font-bold bg-rose-50 text-rose-500 border border-rose-100 px-2 py-0.5 rounded-full uppercase">
-            {items.length} variant{items.length !== 1 ? 's' : ''}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {items.length > 0 && onRestock && (
+            <Button size="sm" onClick={onRestock} className="h-6 text-[10px] bg-primary text-white hover:bg-primary/90 px-2.5 py-0">
+              Restock These
+            </Button>
+          )}
+          {items.length > 0 && (
+            <span className="text-[10px] font-bold bg-rose-50 text-rose-500 border border-rose-100 px-2 py-0.5 rounded-full uppercase">
+              {items.length} variant{items.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
       </div>
 
       {items.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-center py-8 gap-2">
           <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-            <AlertTriangle size={18} className="text-emerald-400" />
+            <CheckCircle2 size={18} className="text-emerald-400" />
           </div>
           <p className="text-sm text-slate-400">All stock levels are healthy</p>
         </div>

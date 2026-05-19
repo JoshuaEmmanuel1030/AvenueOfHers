@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CheckCircle2, Clock, Eye, Pencil, Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { TaskWithMember, Task } from '@/types';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isPast, parseISO } from 'date-fns';
 
 const idr = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
@@ -25,6 +25,8 @@ interface Props {
 }
 
 export function TasksSection({ tasks, onAddTask, onEditTask, onRefresh }: Props) {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const handleStatusChange = async (task: Task, newStatus: Task['status']) => {
     const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id);
     if (error) toast.error(error.message);
@@ -32,10 +34,10 @@ export function TasksSection({ tasks, onAddTask, onEditTask, onRefresh }: Props)
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this task?')) return;
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) toast.error(error.message);
     else { toast.success('Task deleted.'); onRefresh(); }
+    setDeletingId(null);
   };
 
   const pending = tasks.filter(t => t.status === 'pending' || t.status === 'review');
@@ -86,9 +88,15 @@ export function TasksSection({ tasks, onAddTask, onEditTask, onRefresh }: Props)
                   {task.description && (
                     <p className="text-[11px] text-slate-400 mt-0.5 truncate">{task.description}</p>
                   )}
-                  {task.due_date && (
-                    <p className="text-[10px] text-slate-400 mt-0.5">Due {format(new Date(task.due_date), 'MMM d, yyyy')}</p>
-                  )}
+                  {task.due_date && (() => {
+                    const overdue = task.status !== 'done' && task.status !== 'approved' && isPast(parseISO(task.due_date));
+                    return (
+                      <p className={cn('text-[10px] mt-0.5', overdue ? 'text-rose-500 font-semibold' : 'text-slate-400')}>
+                        {overdue ? 'Overdue · ' : 'Due '}
+                        {format(parseISO(task.due_date), 'MMM d, yyyy')}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -98,10 +106,10 @@ export function TasksSection({ tasks, onAddTask, onEditTask, onRefresh }: Props)
 
                   {task.status === 'pending' && (
                     <button
-                      onClick={() => handleStatusChange(task, 'approved')}
+                      onClick={() => handleStatusChange(task, 'review')}
                       className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
                     >
-                      approve
+                      Review
                     </button>
                   )}
                   {task.status === 'review' && (
@@ -109,7 +117,7 @@ export function TasksSection({ tasks, onAddTask, onEditTask, onRefresh }: Props)
                       onClick={() => handleStatusChange(task, 'approved')}
                       className="text-[10px] font-bold px-2.5 py-1 rounded-md border border-border text-slate-600 hover:bg-slate-50 transition-colors"
                     >
-                      review
+                      Approve
                     </button>
                   )}
 
@@ -117,14 +125,32 @@ export function TasksSection({ tasks, onAddTask, onEditTask, onRefresh }: Props)
                     {cfg.label}
                   </span>
 
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onEditTask(task)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600">
-                      <Pencil size={12} />
-                    </button>
-                    <button onClick={() => handleDelete(task.id)} className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-500">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                  {deletingId === task.id ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-slate-500">Delete?</span>
+                      <button
+                        onClick={() => handleDelete(task.id)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500 text-white hover:bg-rose-600 transition-colors"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(null)}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded border border-border text-slate-500 hover:bg-slate-100 transition-colors"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => onEditTask(task)} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                        <Pencil size={12} />
+                      </button>
+                      <button onClick={() => setDeletingId(task.id)} className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-500">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

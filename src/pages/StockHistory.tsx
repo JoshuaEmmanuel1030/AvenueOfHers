@@ -85,7 +85,7 @@ export function StockHistoryPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-border shadow-sm overflow-x-auto">
         {/* Filter tabs */}
         <div className="p-4 border-b bg-slate-50 flex items-center gap-2">
           <History className="text-slate-400" size={16} />
@@ -120,11 +120,21 @@ export function StockHistoryPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-64 text-center">
-                  <RefreshCw className="h-8 w-8 animate-spin mx-auto opacity-20" />
-                </TableCell>
-              </TableRow>
+              <>
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <TableRow key={i} className="animate-pulse">
+                    <TableCell className="px-6 py-4"><div className="h-4 w-32 bg-slate-100 rounded" /></TableCell>
+                    <TableCell className="px-6 py-4">
+                      <div className="h-4 w-36 bg-slate-100 rounded mb-1.5" />
+                      <div className="h-3 w-24 bg-slate-100 rounded" />
+                    </TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-10 bg-slate-100 rounded mx-auto" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-4 w-8 bg-slate-100 rounded mx-auto" /></TableCell>
+                    <TableCell className="px-4 py-4"><div className="h-5 w-16 bg-slate-100 rounded-full" /></TableCell>
+                    <TableCell className="px-6 py-4"><div className="h-4 w-28 bg-slate-100 rounded" /></TableCell>
+                  </TableRow>
+                ))}
+              </>
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-64 text-center text-slate-400">
