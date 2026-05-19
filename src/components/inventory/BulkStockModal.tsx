@@ -102,20 +102,25 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl rounded-xl border-border shadow-xl p-0 overflow-hidden">
-        <div className="flex h-full">
-          {/* Left: Form */}
-          <div className="flex-1 flex flex-col min-w-0">
-            <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
-              <DialogTitle className="text-xl font-bold text-slate-800">Bulk Stock Movement</DialogTitle>
-              <DialogDescription className="text-slate-500">
-                Add multiple variants at once — one submit records everything.
-              </DialogDescription>
-            </DialogHeader>
+      {/* Fixed height + flex column so inner panels can scroll independently */}
+      <DialogContent className="w-[90vw] max-w-5xl sm:max-w-5xl h-[80vh] max-h-[720px] rounded-xl border-border shadow-xl p-0 gap-0 overflow-hidden flex flex-col">
 
-            {/* Header controls */}
-            <div className="px-6 py-4 border-b border-border bg-slate-50 flex flex-wrap gap-3 items-end">
-              {/* Type toggle */}
+        {/* Title bar */}
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border flex-shrink-0">
+          <DialogTitle className="text-xl font-bold text-slate-800">Bulk Stock Movement</DialogTitle>
+          <DialogDescription className="text-slate-500">
+            Add multiple variants at once — one submit records everything.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Two-panel body — flex-1 + min-h-0 so it can shrink and scroll */}
+        <div className="flex flex-1 min-h-0">
+
+          {/* ── Left: Form ── */}
+          <div className="flex flex-col flex-1 min-w-0 min-h-0">
+
+            {/* Shared controls */}
+            <div className="px-6 py-3 border-b border-border bg-slate-50 flex flex-wrap gap-3 items-end flex-shrink-0">
               <div className="space-y-1">
                 <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Direction</Label>
                 <div className="flex rounded-lg border border-border overflow-hidden h-9">
@@ -141,7 +146,6 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                 </div>
               </div>
 
-              {/* Date */}
               <div className="space-y-1">
                 <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Date</Label>
                 <Input
@@ -152,7 +156,6 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                 />
               </div>
 
-              {/* Platform */}
               <div className="space-y-1">
                 <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Platform</Label>
                 <Select value={platform} onValueChange={setPlatform}>
@@ -166,16 +169,18 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
               </div>
             </div>
 
-            {/* Rows */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2 max-h-[380px]">
-              {/* Column labels */}
-              <div className="grid grid-cols-[1fr_80px_1fr_32px] gap-2 px-1">
+            {/* Column headers */}
+            <div className="px-6 pt-4 pb-1 flex-shrink-0">
+              <div className="grid grid-cols-[minmax(0,2fr)_72px_minmax(0,1.5fr)_32px] gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Variant</span>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Qty</span>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Note</span>
                 <span />
               </div>
+            </div>
 
+            {/* Scrollable rows — flex-1 + min-h-0 is the key */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-2 space-y-2">
               {rows.map(row => (
                 <React.Fragment key={row.id}>
                   <BulkRowItem
@@ -188,31 +193,32 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                   />
                 </React.Fragment>
               ))}
+            </div>
 
+            {/* Add row + cancel */}
+            <div className="px-6 py-3 border-t border-border bg-slate-50 flex items-center justify-between flex-shrink-0">
               <button
                 onClick={addRow}
-                className="flex items-center gap-1.5 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors mt-1 px-1"
+                className="flex items-center gap-1.5 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
               >
                 <Plus size={13} /> Add Row
               </button>
-            </div>
-
-            <div className="px-6 py-4 border-t border-border bg-slate-50">
-              <Button type="button" variant="outline" onClick={onClose} className="h-9 border-border text-sm">
+              <Button type="button" variant="outline" onClick={onClose} className="h-8 text-sm border-border">
                 Cancel
               </Button>
             </div>
           </div>
 
-          {/* Right: Summary */}
-          <div className="w-64 border-l border-border bg-slate-50 flex flex-col flex-shrink-0">
-            <div className="px-4 pt-5 pb-3 border-b border-border">
+          {/* ── Right: Summary ── */}
+          <div className="w-60 border-l border-border bg-slate-50 flex flex-col flex-shrink-0 min-h-0">
+
+            <div className="px-4 pt-4 pb-3 border-b border-border flex-shrink-0">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Movement Summary</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-              {/* Meta */}
-              <div className="space-y-1">
+            {/* Meta badge + grouped items — scrollable */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
+              <div className="space-y-0.5">
                 <div className={cn(
                   'inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full',
                   type === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'
@@ -223,43 +229,48 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                 <p className="text-[10px] text-slate-400">{platform} · {format(new Date(date), 'MMM d, yyyy')}</p>
               </div>
 
-              {validRows.length === 0 ? (
-                <p className="text-[11px] text-slate-300 italic">No items added yet</p>
-              ) : (
-                <div className="space-y-3">
-                  {Object.entries(summaryGroups).map(([productName, items]) => (
-                    <div key={productName}>
-                      <p className="text-[11px] font-bold text-slate-700 mb-1">{productName}</p>
-                      <div className="space-y-0.5">
-                        {items.map(({ variant, qty }, i) => (
-                          <div key={i} className="flex justify-between items-baseline">
-                            <span className="text-[11px] text-slate-500 truncate mr-2">
-                              {variant.size} / {variant.color}
-                            </span>
-                            <span className={cn(
-                              'text-[11px] font-bold flex-shrink-0',
-                              type === 'in' ? 'text-emerald-600' : 'text-rose-500'
-                            )}>
-                              {type === 'in' ? '+' : '−'}{qty}
-                            </span>
-                          </div>
-                        ))}
+              <div className="border-t border-border pt-3">
+                {validRows.length === 0 ? (
+                  <p className="text-[11px] text-slate-300 italic">No items added yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(summaryGroups).map(([productName, items]) => (
+                      <div key={productName}>
+                        <p className="text-[11px] font-bold text-slate-700 mb-1">{productName}</p>
+                        <div className="space-y-0.5">
+                          {items.map(({ variant, qty }, i) => (
+                            <div key={i} className="flex justify-between items-baseline gap-2">
+                              <span className="text-[11px] text-slate-500 truncate">
+                                {variant.size} / {variant.color}
+                              </span>
+                              <span className={cn(
+                                'text-[11px] font-bold flex-shrink-0',
+                                type === 'in' ? 'text-emerald-600' : 'text-rose-500'
+                              )}>
+                                {type === 'in' ? '+' : '−'}{qty}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Footer total + submit */}
-            <div className="px-4 py-4 border-t border-border space-y-3">
+            {/* Total + submit — always visible at bottom */}
+            <div className="px-4 py-4 border-t border-border space-y-3 flex-shrink-0">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-slate-400">{validRows.length} variant{validRows.length !== 1 ? 's' : ''}</span>
+                <span className="text-[10px] text-slate-400">
+                  {validRows.length} variant{validRows.length !== 1 ? 's' : ''}
+                </span>
                 <span className={cn(
-                  'text-base font-bold',
+                  'text-lg font-bold',
                   type === 'in' ? 'text-emerald-600' : 'text-rose-500'
                 )}>
-                  {type === 'in' ? '+' : '−'}{totalUnits} units
+                  {type === 'in' ? '+' : '−'}{totalUnits}
+                  <span className="text-xs font-medium ml-1 opacity-60">units</span>
                 </span>
               </div>
               <Button
@@ -272,11 +283,12 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
               >
                 {loading
                   ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : `Submit ${validRows.length > 0 ? `(${validRows.length})` : ''}`
+                  : `Submit (${validRows.length})`
                 }
               </Button>
             </div>
           </div>
+
         </div>
       </DialogContent>
     </Dialog>
@@ -297,7 +309,7 @@ function BulkRowItem({ row, allVariants, usedVariantIds, onChange, onRemove, can
   const selected = allVariants.find(v => v.id === row.variantId);
 
   return (
-    <div className="grid grid-cols-[1fr_80px_1fr_32px] gap-2 items-center">
+    <div className="grid grid-cols-[minmax(0,2fr)_72px_minmax(0,1.5fr)_32px] gap-2 items-center">
       {/* Variant combobox */}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
