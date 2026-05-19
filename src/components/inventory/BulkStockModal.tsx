@@ -180,7 +180,7 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
             </div>
 
             {/* Scrollable rows — flex-1 + min-h-0 is the key */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-2 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-2 space-y-2">
               {rows.map(row => (
                 <React.Fragment key={row.id}>
                   <BulkRowItem
@@ -193,16 +193,18 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
                   />
                 </React.Fragment>
               ))}
-            </div>
 
-            {/* Add row + cancel */}
-            <div className="px-6 py-3 border-t border-border bg-slate-50 flex items-center justify-between flex-shrink-0">
+              {/* Add row — inline after last row */}
               <button
                 onClick={addRow}
-                className="flex items-center gap-1.5 text-[11px] font-bold text-primary hover:text-primary/80 transition-colors"
+                className="w-full h-9 flex items-center gap-2 px-3 rounded-md border border-dashed border-border text-slate-400 hover:text-primary hover:border-primary transition-colors text-[11px] font-bold"
               >
                 <Plus size={13} /> Add Row
               </button>
+            </div>
+
+            {/* Cancel only */}
+            <div className="px-6 py-3 border-t border-border bg-slate-50 flex justify-end flex-shrink-0">
               <Button type="button" variant="outline" onClick={onClose} className="h-8 text-sm border-border">
                 Cancel
               </Button>
@@ -386,7 +388,7 @@ function BulkRowItem({ row, allVariants, usedVariantIds, onChange, onRemove, can
         disabled={!canRemove}
         className={cn(
           'h-8 w-8 flex items-center justify-center rounded-md transition-colors',
-          canRemove ? 'hover:bg-rose-50 text-slate-300 hover:text-rose-400' : 'opacity-0 pointer-events-none'
+          canRemove ? 'text-slate-300 hover:bg-rose-50 hover:text-rose-400' : 'text-slate-200 cursor-not-allowed'
         )}
       >
         <Trash2 size={13} />
