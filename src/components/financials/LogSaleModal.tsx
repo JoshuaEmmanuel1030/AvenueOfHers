@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/popover';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Loader2, Calendar, ChevronsUpDown, Check } from 'lucide-react';
+import { Loader2, Calendar, ChevronsUpDown, Check, AlertTriangle } from 'lucide-react';
 import { ProductWithVariants, ProductVariant } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -70,7 +70,7 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [comboOpen, setComboOpen] = useState(false);
   const [qty, setQty] = useState(1);
-  const [platform, setPlatform] = useState<'Shopee' | 'TikTok' | 'Other'>('Shopee');
+  const [platform, setPlatform] = useState<'Shopee' | 'TikTok' | 'Instagram' | 'Other'>('Shopee');
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [overridePriceStr, setOverridePriceStr] = useState('');
 
@@ -230,6 +230,19 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
             </Popover>
           </div>
 
+          {selectedOption && selectedOption.stock_qty === 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>This variant is <strong>out of stock</strong>. Logging this sale will make stock negative.</span>
+            </div>
+          )}
+          {selectedOption && selectedOption.stock_qty > 0 && qty > selectedOption.stock_qty && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Quantity exceeds available stock — only <strong>{selectedOption.stock_qty}</strong> left.</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             {/* Qty */}
             <div className="space-y-1.5">
@@ -253,6 +266,7 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
                 <SelectContent>
                   <SelectItem value="Shopee">Shopee</SelectItem>
                   <SelectItem value="TikTok">TikTok</SelectItem>
+                  <SelectItem value="Instagram">Instagram</SelectItem>
                   <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>

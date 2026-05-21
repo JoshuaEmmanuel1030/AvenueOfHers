@@ -10,7 +10,7 @@ import {
   TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Plus, History, RefreshCw, Layers } from 'lucide-react';
+import { Plus, History, RefreshCw, Layers, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, startOfMonth, startOfWeek } from 'date-fns';
 import { LogSaleModal } from '@/components/financials/LogSaleModal';
@@ -29,6 +29,8 @@ export function FinancialsPage() {
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [period, setPeriod] = useState<'month' | 'week' | 'all'>('month');
   const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -49,6 +51,21 @@ export function FinancialsPage() {
   };
 
   useEffect(() => { fetchAll(); }, []);
+
+  const handleCancelSale = async (saleId: string) => {
+    setCancelLoading(true);
+    try {
+      const { error } = await supabase.rpc('cancel_sale', { p_sale_id: saleId });
+      if (error) throw error;
+      toast.success('Sale reversed and stock restored.');
+      setCancellingId(null);
+      fetchAll();
+    } catch (error: any) {
+      toast.error('Failed to cancel sale: ' + error.message);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   const now = new Date();
   const periodCutoff = period === 'month' ? startOfMonth(now) : period === 'week' ? startOfWeek(now, { weekStartsOn: 1 }) : null;
@@ -152,6 +169,7 @@ export function FinancialsPage() {
               <TableHead className="px-6 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest h-12">Platform</TableHead>
               <TableHead className="px-6 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest h-12 text-right">Revenue</TableHead>
               <TableHead className="px-6 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-widest h-12 text-right">Margin</TableHead>
+              <TableHead className="px-6 py-3 h-12 w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -168,12 +186,13 @@ export function FinancialsPage() {
                     <TableCell className="px-6 py-4"><div className="h-5 w-16 bg-slate-100 rounded-full" /></TableCell>
                     <TableCell className="px-6 py-4"><div className="h-4 w-24 bg-slate-100 rounded ml-auto" /></TableCell>
                     <TableCell className="px-6 py-4"><div className="h-4 w-14 bg-slate-100 rounded ml-auto" /></TableCell>
+                    <TableCell className="px-6 py-4" />
                   </TableRow>
                 ))}
               </>
             ) : displayedSales.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-64 text-center text-slate-400">
+                <TableCell colSpan={7} className="h-64 text-center text-slate-400">
                   <div className="flex flex-col items-center gap-3">
                     <History size={40} className="opacity-20" />
                     <p>{sales.length === 0 ? 'No sales logged yet.' : `No sales in ${PERIODS.find(p => p.key === period)?.label.toLowerCase()}.`}</p>
@@ -202,6 +221,7 @@ export function FinancialsPage() {
                         'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border',
                         sale.platform === 'Shopee' && 'bg-orange-50 text-orange-700 border-orange-100',
                         sale.platform === 'TikTok' && 'bg-slate-900 text-white border-slate-900',
+                        sale.platform === 'Instagram' && 'bg-pink-50 text-pink-700 border-pink-100',
                         sale.platform === 'Other' && 'bg-blue-50 text-blue-700 border-blue-100'
                       )}>
                         {sale.platform}
@@ -218,6 +238,35 @@ export function FinancialsPage() {
                           </span>
                         );
                       })()}
+                    </TableCell>
+                    <TableCell className="px-4 py-4 text-right">
+                      {cancellingId === sale.id ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-[11px] text-slate-500 mr-1">Reverse?</span>
+                          <button
+                            onClick={() => handleCancelSale(sale.id)}
+                            disabled={cancelLoading}
+                            className="px-2 py-0.5 text-[11px] font-bold rounded bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            onClick={() => setCancellingId(null)}
+                            disabled={cancelLoading}
+                            className="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setCancellingId(sale.id)}
+                          className="opacity-40 hover:opacity-100 transition-opacity text-rose-500"
+                          title="Reverse sale"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

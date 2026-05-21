@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { AddProductModal } from '@/components/inventory/AddProductModal';
@@ -25,7 +25,7 @@ const getStatus = (v: ProductVariant) => {
   return { label: 'In Stock', color: 'bg-emerald-100 text-emerald-700' };
 };
 
-type FlatVariant = ProductVariant & { productName: string; category: string | null };
+type FlatVariant = ProductVariant & { productName: string; category: string | null; isArchived: boolean };
 
 export function InventoryPage() {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
@@ -39,6 +39,9 @@ export function InventoryPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkType, setBulkType] = useState<'in' | 'out'>('out');
   const [page, setPage] = useState(1);
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivingProductId, setArchivingProductId] = useState<string | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   const PAGE_SIZE = 50;
 
@@ -48,7 +51,7 @@ export function InventoryPage() {
       const { data, error } = await supabase
         .from('products')
         .select('*, product_variants(*)')
-        .eq('is_archived', false)
+        .eq('is_archived', showArchived)
         .order('name');
 
       if (error) throw error;
@@ -60,10 +63,25 @@ export function InventoryPage() {
     }
   };
 
-  useEffect(() => { fetchProducts(); }, []);
+  const handleArchiveToggle = async (productId: string, archive: boolean) => {
+    setArchiveLoading(true);
+    try {
+      const { error } = await supabase.from('products').update({ is_archived: archive }).eq('id', productId);
+      if (error) throw error;
+      toast.success(archive ? 'Product archived.' : 'Product restored.');
+      setArchivingProductId(null);
+      fetchProducts();
+    } catch (error: any) {
+      toast.error('Failed to update product: ' + error.message);
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchProducts(); }, [showArchived]);
 
   const allVariants: FlatVariant[] = useMemo(
-    () => products.flatMap(p => p.product_variants.map(v => ({ ...v, productName: p.name, category: p.category }))),
+    () => products.flatMap(p => p.product_variants.map(v => ({ ...v, productName: p.name, category: p.category, isArchived: p.is_archived }))),
     [products]
   );
 
@@ -98,14 +116,26 @@ export function InventoryPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 border-border font-medium"
-            onClick={() => { setBulkType('out'); setBulkOpen(true); }}
+            className={cn('gap-2 border-border font-medium', showArchived && 'bg-slate-700 text-white border-slate-700 hover:bg-slate-600')}
+            onClick={() => { setShowArchived(s => !s); setPage(1); setArchivingProductId(null); }}
           >
-            <Layers size={15} /> Bulk Adjust
+            <Archive size={15} /> {showArchived ? 'Viewing Archived' : 'Archived'}
           </Button>
-          <Button size="sm" className="gap-2 bg-primary text-white hover:bg-primary/90 font-medium shadow-sm" onClick={() => setIsAddOpen(true)}>
-            <Plus size={18} /> Add Product
-          </Button>
+          {!showArchived && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-border font-medium"
+                onClick={() => { setBulkType('out'); setBulkOpen(true); }}
+              >
+                <Layers size={15} /> Bulk Adjust
+              </Button>
+              <Button size="sm" className="gap-2 bg-primary text-white hover:bg-primary/90 font-medium shadow-sm" onClick={() => setIsAddOpen(true)}>
+                <Plus size={18} /> Add Product
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -161,7 +191,7 @@ export function InventoryPage() {
             ) : filtered.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="h-64 text-center text-slate-400">
-                  {searchQuery ? 'No results found.' : 'Your inventory is empty. Add a product to get started.'}
+                  {searchQuery ? 'No results found.' : showArchived ? 'No archived products.' : 'Your inventory is empty. Add a product to get started.'}
                 </TableCell>
               </TableRow>
             ) : (
@@ -181,20 +211,52 @@ export function InventoryPage() {
                       {isNewProduct ? (
                         <div className="flex items-center justify-between group/product">
                           <div>
-                            <p className="font-medium text-slate-800">{v.productName}</p>
+                            <p className={cn('font-medium', showArchived ? 'text-slate-400 line-through' : 'text-slate-800')}>{v.productName}</p>
                             {v.category && <p className="text-[10px] text-slate-400 uppercase tracking-wide">{v.category}</p>}
                           </div>
-                          <button
-                            type="button"
-                            title="Add variant"
-                            onClick={() => {
-                              const product = products.find(p => p.name === v.productName);
-                              if (product) setAddVariantProduct({ product });
-                            }}
-                            className="opacity-40 group-hover/product:opacity-100 p-1 rounded-md hover:bg-slate-100 transition-all text-primary"
-                          >
-                            <PlusCircle size={15} />
-                          </button>
+                          {archivingProductId === v.product_id ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] text-slate-500">{showArchived ? 'Restore?' : 'Archive?'}</span>
+                              <button
+                                onClick={() => handleArchiveToggle(v.product_id, !showArchived)}
+                                disabled={archiveLoading}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => setArchivingProductId(null)}
+                                disabled={archiveLoading}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-100 text-slate-600 hover:bg-slate-200"
+                              >
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-0.5 opacity-40 group-hover/product:opacity-100 transition-opacity">
+                              {!showArchived && (
+                                <button
+                                  type="button"
+                                  title="Add variant"
+                                  onClick={() => {
+                                    const product = products.find(p => p.name === v.productName);
+                                    if (product) setAddVariantProduct({ product });
+                                  }}
+                                  className="p-1 rounded-md hover:bg-slate-100 transition-colors text-primary"
+                                >
+                                  <PlusCircle size={15} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                title={showArchived ? 'Restore product' : 'Archive product'}
+                                onClick={() => setArchivingProductId(v.product_id)}
+                                className="p-1 rounded-md hover:bg-slate-100 transition-colors text-slate-500"
+                              >
+                                {showArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ) : null}
                     </TableCell>

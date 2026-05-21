@@ -75,6 +75,20 @@ BEGIN
 END;
 $$;
 
+-- Reverses a logged sale: deletes the sale row + restores stock in one transaction
+CREATE OR REPLACE FUNCTION cancel_sale(p_sale_id UUID)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_variant_id UUID;
+  v_qty INTEGER;
+BEGIN
+  SELECT variant_id, qty INTO v_variant_id, v_qty FROM public.sales WHERE id = p_sale_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Sale not found'; END IF;
+  DELETE FROM public.sales WHERE id = p_sale_id;
+  UPDATE public.product_variants SET stock_qty = stock_qty + v_qty WHERE id = v_variant_id;
+END;
+$$;
+
 -- Atomic stock adjustment: inserts movement + updates stock in one transaction
 CREATE OR REPLACE FUNCTION adjust_stock(
   p_variant_id UUID, p_type TEXT, p_qty INTEGER, p_platform TEXT, p_note TEXT
