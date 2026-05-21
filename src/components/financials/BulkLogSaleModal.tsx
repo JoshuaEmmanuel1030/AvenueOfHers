@@ -10,7 +10,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Plus, Trash2, Loader2, ChevronsUpDown, Check, Calendar } from 'lucide-react';
+import { Plus, Trash2, Loader2, ChevronsUpDown, Check, Calendar, AlertTriangle } from 'lucide-react';
 import { ProductWithVariants, ProductVariant } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -23,7 +23,7 @@ interface BulkSaleRow {
   priceOverride: string;
 }
 
-const PLATFORMS = ['Shopee', 'TikTok', 'Other'];
+const PLATFORMS = ['Shopee', 'TikTok', 'Instagram', 'Other'];
 
 const formatIDR = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
@@ -287,6 +287,9 @@ interface SaleRowItemProps {
 function SaleRowItem({ row, allVariants, usedVariantIds, onChange, onRemove, canRemove, listPrice }: SaleRowItemProps) {
   const [open, setOpen] = useState(false);
   const selected = allVariants.find(v => v.id === row.variantId);
+  const qtyNum = parseInt(row.qty) || 0;
+  const isOutOfStock = !!selected && selected.stock_qty === 0;
+  const isOversell = !!selected && selected.stock_qty > 0 && qtyNum > selected.stock_qty;
 
   const handleVariantSelect = (v: FlatVariant) => {
     onChange({ variantId: v.id, priceOverride: String(v.sell_price) });
@@ -294,6 +297,7 @@ function SaleRowItem({ row, allVariants, usedVariantIds, onChange, onRemove, can
   };
 
   return (
+    <>
     <div className="grid grid-cols-[minmax(0,2fr)_64px_120px_32px] gap-2 items-center">
       {/* Variant combobox */}
       <Popover open={open} onOpenChange={setOpen}>
@@ -382,5 +386,15 @@ function SaleRowItem({ row, allVariants, usedVariantIds, onChange, onRemove, can
         <Trash2 size={13} />
       </button>
     </div>
+    {(isOutOfStock || isOversell) && (
+      <div className={cn(
+        'flex items-center gap-1.5 -mt-1 mb-0.5 px-1 text-[10px] font-medium',
+        isOutOfStock ? 'text-rose-500' : 'text-amber-600'
+      )}>
+        <AlertTriangle size={10} className="shrink-0" />
+        {isOutOfStock ? 'Out of stock' : `Only ${selected!.stock_qty} left`}
+      </div>
+    )}
+    </>
   );
 }

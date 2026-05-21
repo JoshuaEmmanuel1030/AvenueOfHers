@@ -62,7 +62,7 @@ CREATE POLICY "Public full access on product_variants" ON public.product_variant
 CREATE POLICY "Public full access on sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public full access on stock_movements" ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
 
--- Atomic sale logging: inserts sale + decrements stock in one transaction
+-- Atomic sale logging: inserts sale + decrements stock + records stock movement in one transaction
 CREATE OR REPLACE FUNCTION log_sale(
   p_variant_id UUID, p_qty INTEGER, p_platform TEXT,
   p_sale_date DATE, p_revenue NUMERIC, p_cost_price_at_sale NUMERIC
@@ -72,6 +72,10 @@ BEGIN
   INSERT INTO public.sales (variant_id, qty, platform, sale_date, revenue, cost_price_at_sale)
   VALUES (p_variant_id, p_qty, p_platform, p_sale_date, p_revenue, p_cost_price_at_sale);
   UPDATE public.product_variants SET stock_qty = stock_qty - p_qty WHERE id = p_variant_id;
+  INSERT INTO public.stock_movements (variant_id, type, qty, platform, note)
+  VALUES (p_variant_id, 'out', p_qty,
+    CASE WHEN p_platform IN ('Shopee', 'TikTok', 'Instagram') THEN p_platform ELSE NULL END,
+    'Sale');
 END;
 $$;
 

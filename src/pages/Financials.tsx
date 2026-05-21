@@ -21,7 +21,7 @@ import { ProductWithVariants } from '@/types';
 const formatIDR = (amount: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
-export function FinancialsPage() {
+export function FinancialsPage({ onSaleLogged }: { onSaleLogged?: () => void }) {
   const [sales, setSales] = useState<SaleWithVariant[]>([]);
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
@@ -276,8 +276,8 @@ export function FinancialsPage() {
         </Table>
       </div>
 
-      <LogSaleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={fetchAll} />
-      <BulkLogSaleModal open={isBulkOpen} onClose={() => setIsBulkOpen(false)} onSuccess={fetchAll} products={products} />
+      <LogSaleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={() => { fetchAll(); onSaleLogged?.(); }} />
+      <BulkLogSaleModal open={isBulkOpen} onClose={() => setIsBulkOpen(false)} onSuccess={() => { fetchAll(); onSaleLogged?.(); }} products={products} />
     </div>
   );
 }

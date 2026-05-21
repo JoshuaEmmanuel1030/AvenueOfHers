@@ -17,7 +17,7 @@ import { PlatformBreakdownCard } from '@/components/insights/PlatformBreakdownCa
 import { StockMovementTrendCard } from '@/components/insights/StockMovementTrendCard';
 import { BulkStockModal } from '@/components/inventory/BulkStockModal';
 
-export function InsightsPage() {
+export function InsightsPage({ dataVersion = 0 }: { dataVersion?: number }) {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [sales, setSales] = useState<SaleWithVariant[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -47,7 +47,7 @@ export function InsightsPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [dataVersion]);
 
   const totalVariants = useMemo(
     () => products.reduce((s, p) => s + p.product_variants.length, 0),

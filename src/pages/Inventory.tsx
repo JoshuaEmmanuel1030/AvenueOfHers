@@ -27,7 +27,7 @@ const getStatus = (v: ProductVariant) => {
 
 type FlatVariant = ProductVariant & { productName: string; category: string | null; isArchived: boolean };
 
-export function InventoryPage() {
+export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion?: number; onStockChanged?: () => void }) {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,7 +78,7 @@ export function InventoryPage() {
     }
   };
 
-  useEffect(() => { fetchProducts(); }, [showArchived]);
+  useEffect(() => { fetchProducts(); }, [showArchived, dataVersion]);
 
   const allVariants: FlatVariant[] = useMemo(
     () => products.flatMap(p => p.product_variants.map(v => ({ ...v, productName: p.name, category: p.category, isArchived: p.is_archived }))),
@@ -322,7 +322,7 @@ export function InventoryPage() {
       <BulkStockModal
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
-        onSuccess={fetchProducts}
+        onSuccess={() => { fetchProducts(); onStockChanged?.(); }}
         products={products}
         initialType={bulkType}
       />
@@ -339,7 +339,7 @@ export function InventoryPage() {
         productName={adjustingVariant?.productName ?? ''}
         initialType={adjustType}
         onClose={() => setAdjustingVariant(null)}
-        onSuccess={fetchProducts}
+        onSuccess={() => { fetchProducts(); onStockChanged?.(); }}
       />
     </div>
   );
