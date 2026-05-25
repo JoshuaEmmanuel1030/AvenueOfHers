@@ -6,10 +6,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import { parseSupabaseError } from '@/lib/errors';
 import { toast } from 'sonner';
-import { Loader2, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Product } from '@/types';
 
 const withCommas = (val: string) => {
@@ -130,6 +131,16 @@ export function AddVariantModal({ product, existingVariantCount, onClose, onSucc
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {product && (product.available_sizes?.length === 0 || product.available_colors?.length === 0) && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                This product has no {product.available_sizes?.length === 0 && 'sizes'}
+                {product.available_sizes?.length === 0 && product.available_colors?.length === 0 && ' or '}
+                {product.available_colors?.length === 0 && 'colors'} defined in the Catalogue. Set them up there for cleaner dropdowns.
+              </span>
+            </div>
+          )}
           <div className="space-y-3">
             {variants.map((v, i) => (
               <div key={i} className="p-3 rounded-lg border border-border bg-slate-50 space-y-3">
@@ -144,11 +155,33 @@ export function AddVariantModal({ product, existingVariantCount, onClose, onSucc
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Size</Label>
-                    <Input value={v.size} onChange={e => updateVariant(i, 'size', e.target.value)} placeholder="S / M / L" required className="h-9 border-border bg-white text-sm" />
+                    {product?.available_sizes?.length ? (
+                      <Select value={v.size} onValueChange={val => updateVariant(i, 'size', val)} required>
+                        <SelectTrigger className="h-9 border-border bg-white text-sm">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {product.available_sizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input value={v.size} onChange={e => updateVariant(i, 'size', e.target.value)} placeholder="S / M / L" required className="h-9 border-border bg-white text-sm" />
+                    )}
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Color</Label>
-                    <Input value={v.color} onChange={e => updateVariant(i, 'color', e.target.value)} placeholder="Mint" required className="h-9 border-border bg-white text-sm" />
+                    {product?.available_colors?.length ? (
+                      <Select value={v.color} onValueChange={val => updateVariant(i, 'color', val)} required>
+                        <SelectTrigger className="h-9 border-border bg-white text-sm">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {product.available_colors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input value={v.color} onChange={e => updateVariant(i, 'color', e.target.value)} placeholder="Mint" required className="h-9 border-border bg-white text-sm" />
+                    )}
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">

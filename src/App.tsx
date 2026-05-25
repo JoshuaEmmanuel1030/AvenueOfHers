@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { CataloguePage } from '@/pages/Catalogue';
 import { InventoryPage } from '@/pages/Inventory';
 import { FinancialsPage } from '@/pages/Financials';
 import { StockHistoryPage } from '@/pages/StockHistory';
@@ -11,7 +12,7 @@ import { AlertCircle, Menu, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
-type Tab = 'inventory' | 'stock-history' | 'insights' | 'financials' | 'kpi';
+type Tab = 'catalogue' | 'inventory' | 'stock-history' | 'insights' | 'financials' | 'kpi';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('kpi');
@@ -87,6 +88,7 @@ export default function App() {
       <main className="flex-1 overflow-y-auto bg-background pt-14 lg:pt-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-10 min-h-full">
           {/* Pages stay mounted after first visit — no refetch on every tab switch */}
+          <div className={activeTab !== 'catalogue' ? 'hidden' : ''}><CataloguePage dataVersion={dataVersion} onCatalogueChanged={notifyDataChange} /></div>
           <div className={activeTab !== 'inventory' ? 'hidden' : ''}><InventoryPage dataVersion={dataVersion} onStockChanged={notifyDataChange} /></div>
           <div className={activeTab !== 'financials' ? 'hidden' : ''}><FinancialsPage onSaleLogged={notifyDataChange} /></div>
           <div className={activeTab !== 'stock-history' ? 'hidden' : ''}><StockHistoryPage /></div>

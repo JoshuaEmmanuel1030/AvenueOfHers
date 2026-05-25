@@ -3,6 +3,9 @@ export interface Product {
   name: string;
   category: string | null;
   description: string | null;
+  collection: string | null;
+  available_sizes: string[];
+  available_colors: string[];
   is_archived: boolean;
   created_at: string;
 }

@@ -6,11 +6,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import { parseSupabaseError } from '@/lib/errors';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { ProductVariant } from '@/types';
+
+const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 
 const withCommas = (val: string) => {
   const digits = val.replace(/\D/g, '');
@@ -90,7 +93,16 @@ export function EditVariantModal({ variant, onClose, onSuccess }: EditVariantMod
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Size</Label>
-              <Input value={form.size} onChange={e => setForm(p => ({ ...p, size: e.target.value }))} required className="h-10 border-border" />
+              <Select value={form.size} onValueChange={val => setForm(p => ({ ...p, size: val }))}>
+                <SelectTrigger className="h-10 border-border">
+                  <SelectValue placeholder="Select size" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[...new Set([...SIZES, ...(form.size && !SIZES.includes(form.size) ? [form.size] : [])])].map(s => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Color</Label>

@@ -6,10 +6,9 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
+import { Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { AddProductModal } from '@/components/inventory/AddProductModal';
 import { AddVariantModal } from '@/components/inventory/AddVariantModal';
 import { EditVariantModal } from '@/components/inventory/EditVariantModal';
 import { StockAdjustModal } from '@/components/inventory/StockAdjustModal';
@@ -31,7 +30,6 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isAddOpen, setIsAddOpen] = useState(false);
   const [addVariantProduct, setAddVariantProduct] = useState<{ product: ProductWithVariants } | null>(null);
   const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
   const [adjustingVariant, setAdjustingVariant] = useState<FlatVariant | null>(null);
@@ -130,9 +128,6 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
                 onClick={() => { setBulkType('out'); setBulkOpen(true); }}
               >
                 <Layers size={15} /> Bulk Adjust
-              </Button>
-              <Button size="sm" className="gap-2 bg-primary text-white hover:bg-primary/90 font-medium shadow-sm" onClick={() => setIsAddOpen(true)}>
-                <Plus size={18} /> Add Product
               </Button>
             </>
           )}
@@ -326,7 +321,6 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
         products={products}
         initialType={bulkType}
       />
-      <AddProductModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={fetchProducts} />
       <AddVariantModal
         product={addVariantProduct?.product ?? null}
         existingVariantCount={addVariantProduct?.product.product_variants.length ?? 0}

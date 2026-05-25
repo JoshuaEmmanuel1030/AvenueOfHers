@@ -1,8 +1,8 @@
 import React from 'react';
-import { TrendingUp, Package, History, ChevronDown, BarChart2, ClipboardList } from 'lucide-react';
+import { TrendingUp, Package, History, ChevronDown, BarChart2, ClipboardList, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Tab = 'inventory' | 'stock-history' | 'insights' | 'financials' | 'kpi';
+type Tab = 'catalogue' | 'inventory' | 'stock-history' | 'insights' | 'financials' | 'kpi';
 
 interface SidebarProps {
   activeTab: Tab;
@@ -27,6 +27,20 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       </div>
 
       <nav className="flex-1 py-6">
+        {/* Catalogue */}
+        <button
+          className={cn(
+            'w-full flex items-center px-6 py-3 transition-colors font-medium border-r-4',
+            activeTab === 'catalogue'
+              ? 'bg-secondary text-primary border-primary'
+              : 'text-slate-500 hover:text-primary hover:bg-slate-50 border-transparent'
+          )}
+          onClick={() => onTabChange('catalogue')}
+        >
+          <BookOpen size={20} className="mr-3" />
+          <span>Catalogue</span>
+        </button>
+
         {/* Inventory group */}
         <div>
           <button

@@ -1,16 +1,29 @@
 -- Run this in Supabase SQL Editor.
 -- If you ran the old schema, run the DROP statements first.
 
+-- ============================================================
+-- MIGRATION (run this block ONLY if you already have data and
+-- want to add Catalogue support without wiping the DB):
+-- ============================================================
+-- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS collection TEXT;
+-- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS available_sizes TEXT[] NOT NULL DEFAULT '{}';
+-- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS available_colors TEXT[] NOT NULL DEFAULT '{}';
+-- ============================================================
+
 DROP TABLE IF EXISTS public.sales;
 DROP TABLE IF EXISTS public.product_variants;
 DROP TABLE IF EXISTS public.products;
 
 -- Products table — represents a style/design (e.g. "Floral Midi Dress")
+-- Catalogue-defined: available_sizes/colors constrain what variants can exist
 CREATE TABLE public.products (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     name TEXT NOT NULL,
     category TEXT,
     description TEXT,
+    collection TEXT,
+    available_sizes TEXT[] NOT NULL DEFAULT '{}',
+    available_colors TEXT[] NOT NULL DEFAULT '{}',
     is_archived BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
