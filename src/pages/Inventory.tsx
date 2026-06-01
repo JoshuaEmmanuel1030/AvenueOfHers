@@ -6,13 +6,14 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
+import { Search, RefreshCw, Pencil, PackagePlus, PackageMinus, PlusCircle, Layers, ChevronLeft, ChevronRight, Archive, ArchiveRestore, PackageCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { AddVariantModal } from '@/components/inventory/AddVariantModal';
 import { EditVariantModal } from '@/components/inventory/EditVariantModal';
 import { StockAdjustModal } from '@/components/inventory/StockAdjustModal';
 import { BulkStockModal } from '@/components/inventory/BulkStockModal';
+import { QuickStockInModal } from '@/components/inventory/QuickStockInModal';
 import { cn } from '@/lib/utils';
 
 const formatIDR = (amount: number) =>
@@ -36,6 +37,7 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
   const [adjustType, setAdjustType] = useState<'in' | 'out'>('in');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkType, setBulkType] = useState<'in' | 'out'>('out');
+  const [quickStockInOpen, setQuickStockInOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [showArchived, setShowArchived] = useState(false);
   const [archivingProductId, setArchivingProductId] = useState<string | null>(null);
@@ -121,6 +123,13 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
           </Button>
           {!showArchived && (
             <>
+              <Button
+                size="sm"
+                className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm"
+                onClick={() => setQuickStockInOpen(true)}
+              >
+                <PackageCheck size={15} /> Stock In
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -314,6 +323,12 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
         </div>
       </div>
 
+      <QuickStockInModal
+        open={quickStockInOpen}
+        products={products}
+        onClose={() => setQuickStockInOpen(false)}
+        onSuccess={() => { fetchProducts(); onStockChanged?.(); }}
+      />
       <BulkStockModal
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
