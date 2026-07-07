@@ -11,6 +11,23 @@ interface Message {
   content: string;
 }
 
+// Safety net: the model is instructed to answer in plain text, but if markdown
+// or LaTeX notation slips through, strip it rather than showing raw symbols.
+function cleanAssistantText(text: string): string {
+  return text
+    // LaTeX delimiters: \( x \), \[ x \], $$ x $$
+    .replace(/\\\[|\\\]|\\\(|\\\)/g, '')
+    .replace(/\$\$([^$]+)\$\$/g, '$1')
+    // Common LaTeX commands → plain equivalents
+    .replace(/\\times/g, 'x')
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, '$1/$2')
+    .replace(/\\text\{([^}]*)\}/g, '$1')
+    // Markdown: bold/italics, headers, horizontal rules
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(^|\n)#{1,6}\s*/g, '$1')
+    .replace(/(^|\n)[-*_]{3,}\s*(\n|$)/g, '$1');
+}
+
 export function InventoryAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -42,7 +59,7 @@ export function InventoryAssistant() {
       if (error) throw new Error(error.message || 'Failed to get response');
       if (data?.error) throw new Error(data.error);
 
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: cleanAssistantText(data.response) }]);
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to send message');
