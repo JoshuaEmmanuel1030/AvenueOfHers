@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { CataloguePage } from '@/pages/Catalogue';
 import { InventoryPage } from '@/pages/Inventory';
@@ -20,6 +20,30 @@ export default function App() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const notifyDataChange = () => setDataVersion(v => v + 1);
+
+  // Refetch when the tab regains focus so two devices don't show two
+  // different stock levels (same pattern as EggKeep — a phone and a laptop
+  // both left open would otherwise drift apart). One dataVersion bump
+  // refetches every wired page, so throttle rapid focus flapping.
+  const lastFocusRefresh = useRef(0);
+  useEffect(() => {
+    const FOCUS_REFRESH_MIN_MS = 30_000;
+    const refreshOnFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusRefresh.current < FOCUS_REFRESH_MIN_MS) return;
+      lastFocusRefresh.current = now;
+      setDataVersion(v => v + 1);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshOnFocus();
+    };
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
   if (!isSupabaseConfigured) {
     return (
@@ -94,7 +118,7 @@ export default function App() {
           <div className={activeTab !== 'financials' ? 'hidden' : ''}><FinancialsPage dataVersion={dataVersion} onSaleLogged={notifyDataChange} /></div>
           <div className={activeTab !== 'stock-history' ? 'hidden' : ''}><StockHistoryPage dataVersion={dataVersion} /></div>
           <div className={activeTab !== 'insights' ? 'hidden' : ''}><InsightsPage dataVersion={dataVersion} onDataChanged={notifyDataChange} /></div>
-          <div className={activeTab !== 'kpi' ? 'hidden' : ''}><KPIPage /></div>
+          <div className={activeTab !== 'kpi' ? 'hidden' : ''}><KPIPage dataVersion={dataVersion} /></div>
         </div>
       </main>
 

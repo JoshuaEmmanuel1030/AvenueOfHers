@@ -14,7 +14,7 @@ import { AddTaskModal } from '@/components/kpi/AddTaskModal';
 import { AddMemberModal } from '@/components/kpi/AddMemberModal';
 import { SetTargetModal } from '@/components/kpi/SetTargetModal';
 
-export function KPIPage() {
+export function KPIPage({ dataVersion }: { dataVersion?: number }) {
   const [sales, setSales] = useState<Sale[]>([]);
   const [tasks, setTasks] = useState<TaskWithMember[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -59,7 +59,7 @@ export function KPIPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [dataVersion]);
 
   const now = new Date();
   const monthRevenue = sales.reduce((s, sale) => s + sale.revenue, 0);
