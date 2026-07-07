@@ -100,7 +100,7 @@ export default function App() {
         >
           <Menu size={20} />
         </button>
-        <h1 className="text-base font-serif font-bold text-primary ml-3">Avenue of Hers</h1>
+        <img src="/logo.png" alt="Avenue of Hers" className="h-5 w-auto ml-3" />
       </div>
 
       {/* Mobile sidebar overlay */}

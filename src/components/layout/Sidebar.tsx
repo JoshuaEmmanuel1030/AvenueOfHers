@@ -22,7 +22,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
     <aside className="w-64 bg-white border-r border-border h-screen flex flex-col shadow-sm">
       <div className="p-6 border-b border-border">
-        <h1 className="text-xl font-serif font-bold tracking-tight text-primary">Avenue of Hers</h1>
+        <img src="/logo.png" alt="Avenue of Hers" className="h-6 w-auto" />
         <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mt-1">Solo Business Suite</p>
       </div>
 
