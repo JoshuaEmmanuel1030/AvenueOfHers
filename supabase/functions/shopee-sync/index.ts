@@ -6,9 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Shopee Open Platform v2 — TEST environment. Swap to
-// https://partner.shopeemobile.com when production credentials arrive.
-const SHOPEE_HOST = 'https://partner.test-stable.shopeemobile.com';
+// Shopee Open Platform v2 — SANDBOX environment (the current sandbox host;
+// the older partner.test-stable.shopeemobile.com rejects new test keys with
+// error_sign). Swap to https://partner.shopeemobile.com for production.
+const SHOPEE_HOST = 'https://openplatform.sandbox.test-stable.shopee.sg';
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
