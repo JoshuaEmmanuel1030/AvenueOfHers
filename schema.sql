@@ -216,3 +216,56 @@ BEGIN
   END LOOP;
 END;
 $$;
+
+-- ------------------------------------------------------------
+-- 9. Shopee order sync (see migrations/2026-07-07_shopee_sync.sql)
+-- ------------------------------------------------------------
+
+-- Shop-level OAuth tokens. Service-role only: RLS with NO policies.
+CREATE TABLE public.shopee_auth (
+    shop_id BIGINT PRIMARY KEY,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+ALTER TABLE public.shopee_auth ENABLE ROW LEVEL SECURITY;
+
+-- Idempotency ledger: one row per Shopee order ever logged.
+CREATE TABLE public.shopee_synced_orders (
+    order_sn TEXT PRIMARY KEY,
+    shop_id BIGINT NOT NULL,
+    items JSONB NOT NULL,
+    synced_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+ALTER TABLE public.shopee_synced_orders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read on shopee_synced_orders"
+  ON public.shopee_synced_orders FOR SELECT USING (true);
+
+-- Logs one Shopee order atomically via log_sale per line item; marks
+-- the order synced in the same transaction. Replay-safe.
+CREATE OR REPLACE FUNCTION public.log_shopee_order(
+  p_order_sn TEXT, p_shop_id BIGINT, p_sale_date DATE, p_items JSONB
+)
+RETURNS TEXT LANGUAGE plpgsql SECURITY DEFINER AS $func$
+DECLARE
+  v_item JSONB;
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.shopee_synced_orders WHERE order_sn = p_order_sn) THEN
+    RETURN 'already_synced';
+  END IF;
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    PERFORM public.log_sale(
+      (v_item->>'variant_id')::UUID,
+      (v_item->>'qty')::INTEGER,
+      'Shopee',
+      p_sale_date,
+      (v_item->>'revenue')::NUMERIC,
+      (v_item->>'cost_price_at_sale')::NUMERIC
+    );
+  END LOOP;
+  INSERT INTO public.shopee_synced_orders (order_sn, shop_id, items)
+  VALUES (p_order_sn, p_shop_id, p_items);
+  RETURN 'synced';
+END;
+$func$;

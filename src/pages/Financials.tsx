@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { format, startOfMonth, startOfWeek } from 'date-fns';
 import { LogSaleModal } from '@/components/financials/LogSaleModal';
 import { BulkLogSaleModal } from '@/components/financials/BulkLogSaleModal';
+import { ShopeeSyncButton } from '@/components/financials/ShopeeSyncButton';
 import { cn } from '@/lib/utils';
 import { ProductWithVariants } from '@/types';
 
@@ -114,6 +115,7 @@ export function FinancialsPage({ dataVersion, onSaleLogged }: { dataVersion?: nu
           <Button variant="outline" size="sm" onClick={fetchAll} disabled={loading} className="border-border">
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
           </Button>
+          <ShopeeSyncButton onSynced={() => { fetchAll(); onSaleLogged?.(); }} />
           <Button
             variant="outline"
             size="sm"

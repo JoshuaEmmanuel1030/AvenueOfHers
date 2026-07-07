@@ -8,7 +8,8 @@ import { InsightsPage } from '@/pages/Insights';
 import { KPIPage } from '@/pages/KPI';
 import { InventoryAssistant } from '@/components/assistant/InventoryAssistant';
 import { Toaster } from '@/components/ui/sonner';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import { AlertCircle, Menu, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,27 @@ export default function App() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
   const notifyDataChange = () => setDataVersion(v => v + 1);
+
+  // Shopee authorization callback: after the user authorizes the shop,
+  // Shopee redirects back here with ?code=&shop_id=. Exchange them for
+  // tokens (stored server-side by the edge function), then clean the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const shopId = params.get('shop_id');
+    if (!code || !shopId || !isSupabaseConfigured) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    (async () => {
+      const { data, error } = await supabase.functions.invoke('shopee-sync', {
+        body: { action: 'exchange', code, shop_id: shopId },
+      });
+      if (error || data?.error) {
+        toast.error('Shopee connection failed: ' + (data?.error ?? error?.message));
+      } else {
+        toast.success(`Shopee shop ${data.shop_id} connected — use Sync Shopee in Financials.`);
+      }
+    })();
+  }, []);
 
   // Refetch when the tab regains focus so two devices don't show two
   // different stock levels (same pattern as EggKeep — a phone and a laptop
