@@ -59,9 +59,9 @@ export function EditVariantModal({ variant, onClose, onSuccess }: EditVariantMod
       const { error } = await supabase
         .from('product_variants')
         .update({
-          size: form.size,
-          color: form.color,
-          sku: form.sku,
+          size: form.size.trim(),
+          color: form.color.trim(),
+          sku: form.sku.trim(),
           cost_price: parseFloat(stripCommas(form.cost_price)) || 0,
           sell_price: parseFloat(stripCommas(form.sell_price)) || 0,
           reorder_threshold: form.reorder_threshold.trim() === '' ? 5 : (parseInt(form.reorder_threshold) || 0),

@@ -161,6 +161,8 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
           </div>
         </div>
 
+        {/* Desktop table */}
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-slate-50 border-border">
@@ -243,7 +245,7 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
                                   type="button"
                                   title="Add variant"
                                   onClick={() => {
-                                    const product = products.find(p => p.name === v.productName);
+                                    const product = products.find(p => p.id === v.product_id);
                                     if (product) setAddVariantProduct({ product });
                                   }}
                                   className="p-1 rounded-md hover:bg-slate-100 transition-colors text-primary"
@@ -294,6 +296,85 @@ export function InventoryPage({ dataVersion = 0, onStockChanged }: { dataVersion
             )}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-border">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="p-4 animate-pulse space-y-2">
+                <div className="h-4 w-32 bg-slate-100 rounded" />
+                <div className="h-3 w-24 bg-slate-100 rounded" />
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
+            <div className="h-48 flex items-center justify-center text-center text-slate-400 px-4">
+              {searchQuery ? 'No results found.' : showArchived ? 'No archived products.' : 'Your inventory is empty. Add a product to get started.'}
+            </div>
+          ) : (
+            pagedVariants.map((v, i) => {
+              const globalIndex = (clampedPage - 1) * PAGE_SIZE + i;
+              const status = getStatus(v);
+              const isNewProduct = globalIndex === 0 || filtered[globalIndex - 1].productName !== v.productName;
+              return (
+                <div key={v.id} className={cn('p-4 space-y-2', isNewProduct && i !== 0 && 'border-t-4 border-t-slate-100')}>
+                  {isNewProduct && (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className={cn('font-semibold truncate', showArchived ? 'text-slate-400 line-through' : 'text-slate-800')}>{v.productName}</p>
+                        {v.category && <p className="text-[10px] text-slate-400 uppercase tracking-wide">{v.category}</p>}
+                      </div>
+                      {!showArchived && (
+                        <button
+                          type="button"
+                          title="Add variant"
+                          onClick={() => {
+                            const product = products.find(p => p.id === v.product_id);
+                            if (product) setAddVariantProduct({ product });
+                          }}
+                          className="p-1.5 rounded-md hover:bg-slate-100 text-primary shrink-0"
+                        >
+                          <PlusCircle size={16} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <span className="font-medium text-slate-800">{v.size}</span>
+                      <span className="text-slate-300">·</span>
+                      <span>{v.color}</span>
+                    </div>
+                    <Badge variant="outline" className={cn('px-2 py-0.5 text-[10px] font-bold uppercase rounded-full shadow-none border-none', status.color)}>
+                      {status.label}
+                    </Badge>
+                  </div>
+                  <p className="font-mono text-[11px] text-slate-400">{v.sku}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-slate-500">
+                      Stock: <span className="font-mono font-semibold text-slate-800">{v.stock_qty}</span>
+                      <span className="mx-2 text-slate-300">·</span>
+                      {formatIDR(v.sell_price)}
+                    </div>
+                    {!showArchived && (
+                      <div className="flex items-center gap-1">
+                        <ActionBtn title="Stock In" onClick={() => { setAdjustType('in'); setAdjustingVariant(v); }}>
+                          <PackagePlus size={16} className="text-emerald-600" />
+                        </ActionBtn>
+                        <ActionBtn title="Stock Out" onClick={() => { setAdjustType('out'); setAdjustingVariant(v); }}>
+                          <PackageMinus size={16} className="text-rose-500" />
+                        </ActionBtn>
+                        <ActionBtn title="Edit" onClick={() => setEditingVariant(v)}>
+                          <Pencil size={16} className="text-slate-500" />
+                        </ActionBtn>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
 
         <div className="bg-slate-50 px-6 py-3 border-t border-border flex items-center justify-between text-xs text-slate-400">
           <span>

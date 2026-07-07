@@ -55,7 +55,8 @@ export function getLowStockItems(products: ProductWithVariants[]): LowStockItem[
   const items: LowStockItem[] = [];
   for (const p of products) {
     for (const v of p.product_variants) {
-      if (v.stock_qty <= v.reorder_threshold) {
+      // Low stock only — zero stock is its own category (matches getStockHealth & Inventory page)
+      if (v.stock_qty > 0 && v.stock_qty <= v.reorder_threshold) {
         items.push({
           sku: v.sku,
           productName: p.name,
@@ -123,10 +124,11 @@ export interface TrendDay {
 }
 
 export function getStockTrend(movements: StockMovement[], days = 30): TrendDay[] {
-  // Pre-index by date prefix: O(n) pass instead of O(n*m) nested filter per day
+  // Pre-index by local-time day key: O(n) pass instead of O(n*m) nested filter per day.
+  // created_at is a timestamptz — bucket in local time to match the day keys below.
   const byDate = new Map<string, { in: number; out: number }>();
   for (const m of movements) {
-    const prefix = m.created_at.slice(0, 10);
+    const prefix = format(new Date(m.created_at), 'yyyy-MM-dd');
     const entry = byDate.get(prefix) ?? { in: 0, out: 0 };
     if (m.type === 'in') entry.in += m.qty;
     else entry.out += m.qty;

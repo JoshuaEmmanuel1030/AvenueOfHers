@@ -27,11 +27,11 @@ interface MovementRow {
 const PLATFORM_STYLES: Record<string, string> = {
   Shopee: 'bg-orange-50 text-orange-700 border-orange-100',
   TikTok: 'bg-slate-900 text-white border-slate-900',
-  Instagram: 'bg-purple-50 text-purple-700 border-purple-100',
+  Instagram: 'bg-pink-50 text-pink-700 border-pink-100',
   Manual: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
-export function StockHistoryPage() {
+export function StockHistoryPage({ dataVersion }: { dataVersion?: number }) {
   const [movements, setMovements] = useState<MovementRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'in' | 'out'>('all');
@@ -42,7 +42,8 @@ export function StockHistoryPage() {
       const { data, error } = await supabase
         .from('stock_movements')
         .select('*, product_variants(size, color, sku, products(name))')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(1000); // Cap unbounded fetch; proper pagination is the eventual fix
 
       if (error) throw error;
       setMovements((data as any) || []);
@@ -53,7 +54,7 @@ export function StockHistoryPage() {
     }
   };
 
-  useEffect(() => { fetchMovements(); }, []);
+  useEffect(() => { fetchMovements(); }, [dataVersion]);
 
   const filtered = filter === 'all' ? movements : movements.filter(m => m.type === filter);
 
@@ -70,7 +71,7 @@ export function StockHistoryPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-border shadow-sm">
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Movements</p>
           <p className="text-xl font-bold text-slate-800">{movements.length}</p>
@@ -107,6 +108,8 @@ export function StockHistoryPage() {
           </div>
         </div>
 
+        {/* Desktop table */}
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-slate-50 border-border">
@@ -194,6 +197,56 @@ export function StockHistoryPage() {
             )}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-border">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="p-4 animate-pulse space-y-2">
+                <div className="h-4 w-32 bg-slate-100 rounded" />
+                <div className="h-3 w-24 bg-slate-100 rounded" />
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center gap-3 text-slate-400">
+              <History size={36} className="opacity-20" />
+              <p>No stock movements yet.</p>
+            </div>
+          ) : (
+            filtered.map(m => {
+              const variant = m.product_variants;
+              return (
+                <div key={m.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-800 truncate">{variant?.products?.name ?? '—'}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {variant ? `${variant.size} / ${variant.color}` : '—'}
+                        {variant?.sku && <span className="font-mono ml-1">· {variant.sku}</span>}
+                      </p>
+                    </div>
+                    <span className={cn('font-mono font-bold text-sm shrink-0', m.type === 'in' ? 'text-emerald-600' : 'text-rose-500')}>
+                      {m.type === 'in' ? '+' : '−'}{m.qty}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="text-slate-400">{format(new Date(m.created_at), 'MMM d, yyyy · h:mm a')}</span>
+                    {m.platform && (
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full font-bold uppercase border',
+                        PLATFORM_STYLES[m.platform] ?? 'bg-slate-100 text-slate-600 border-slate-200'
+                      )}>
+                        {m.platform}
+                      </span>
+                    )}
+                  </div>
+                  {m.note && <p className="text-[11px] text-slate-500 italic">{m.note}</p>}
+                </div>
+              );
+            })
+          )}
+        </div>
 
         <div className="bg-slate-50 px-6 py-3 border-t border-border text-xs text-slate-400">
           {filtered.length} movement{filtered.length !== 1 ? 's' : ''}

@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import { Loader2, Calendar, ChevronsUpDown, Check, AlertTriangle } from 'lucide-react';
 import { ProductWithVariants, ProductVariant } from '@/types';
 import { cn } from '@/lib/utils';
+import { parseSupabaseError } from '@/lib/errors';
 
 const withCommas = (val: string) => {
   const digits = val.replace(/\D/g, '');
@@ -122,6 +123,7 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
   const overridePrice = parseFloat(stripCommas(overridePriceStr)) || 0;
   const revenue = overridePrice * qty;
   const isPriceOverridden = selectedOption && overridePrice !== selectedOption.sell_price;
+  const isOversell = !!selectedOption && qty > selectedOption.stock_qty;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,7 +148,11 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
       onSuccess();
       handleClose();
     } catch (error: any) {
-      toast.error('Failed to log sale: ' + error.message);
+      if (error?.message?.includes('Insufficient stock')) {
+        toast.error('Not enough stock for this variant — it may have just sold out. Refresh and try again.');
+      } else {
+        toast.error('Failed to log sale: ' + parseSupabaseError(error));
+      }
     } finally {
       setLoading(false);
     }
@@ -233,7 +239,7 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
           {selectedOption && selectedOption.stock_qty === 0 && (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>This variant is <strong>out of stock</strong>. Logging this sale will make stock negative.</span>
+              <span>This variant is <strong>out of stock</strong> — restock it before logging a sale.</span>
             </div>
           )}
           {selectedOption && selectedOption.stock_qty > 0 && qty > selectedOption.stock_qty && (
@@ -328,7 +334,7 @@ export function LogSaleModal({ isOpen, onClose, onSuccess }: LogSaleModalProps) 
 
           <DialogFooter className="pt-2">
             <Button type="button" variant="outline" onClick={handleClose} className="h-10 border-border">Cancel</Button>
-            <Button type="submit" disabled={loading || !selectedVariantId} className="h-10 bg-primary text-white hover:bg-primary/90 px-6 font-medium shadow-sm">
+            <Button type="submit" disabled={loading || !selectedVariantId || isOversell} className="h-10 bg-primary text-white hover:bg-primary/90 px-6 font-medium shadow-sm">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Sale'}
             </Button>
           </DialogFooter>

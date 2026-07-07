@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '@/components/ui/dialog';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Loader2, ChevronsUpDown, Check, Calendar, AlertTriangle } from 'lucide-react';
 import { ProductWithVariants, ProductVariant } from '@/types';
 import { cn } from '@/lib/utils';
+import { parseSupabaseError } from '@/lib/errors';
 
 type FlatVariant = ProductVariant & { productName: string };
 
@@ -50,6 +51,7 @@ export function BulkLogSaleModal({ open, onClose, onSuccess, products }: Props) 
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [rows, setRows] = useState<BulkSaleRow[]>([newRow()]);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   const allVariants: FlatVariant[] = products.flatMap(p =>
     p.product_variants.map(v => ({ ...v, productName: p.name }))
@@ -63,11 +65,14 @@ export function BulkLogSaleModal({ open, onClose, onSuccess, products }: Props) 
   const resolvedRows = rows.map(row => {
     const variant = allVariants.find(v => v.id === row.variantId);
     const qty = parseInt(row.qty) || 0;
-    const price = parseFloat(stripCommas(row.priceOverride)) || (variant?.sell_price ?? 0);
+    // Explicit empty check so an intentional 0 override (giveaway) isn't replaced by the list price
+    const overridden = parseFloat(stripCommas(row.priceOverride));
+    const price = row.priceOverride.trim() !== '' && !isNaN(overridden) ? overridden : (variant?.sell_price ?? 0);
     return { row, variant, qty, price, revenue: price * qty };
   });
 
   const validRows = resolvedRows.filter(r => r.variant && r.qty > 0);
+  const hasOversell = validRows.some(r => r.qty > r.variant!.stock_qty);
   const totalUnits = validRows.reduce((s, r) => s + r.qty, 0);
   const totalRevenue = validRows.reduce((s, r) => s + r.revenue, 0);
 
@@ -81,31 +86,38 @@ export function BulkLogSaleModal({ open, onClose, onSuccess, products }: Props) 
   );
 
   const handleSubmit = async () => {
-    if (loading) return;
+    if (submittingRef.current || loading) return;
     if (validRows.length === 0) { toast.error('Add at least one variant with a quantity.'); return; }
+    submittingRef.current = true;
     setLoading(true);
     try {
-      const results = await Promise.all(
-        validRows.map(({ row, variant, qty, price }) =>
-          supabase.rpc('log_sale', {
-            p_variant_id: row.variantId,
-            p_qty: qty,
-            p_platform: platform,
-            p_sale_date: saleDate,
-            p_revenue: price * qty,
-            p_cost_price_at_sale: variant!.cost_price,
-          })
-        )
-      );
-      const firstFailed = results.find(r => r.error);
-      if (firstFailed?.error) throw firstFailed.error;
+      // Sort by variant_id so concurrent batches lock rows in the same order (deadlock avoidance).
+      const { error } = await supabase.rpc('log_sale_batch', {
+        p_sales: validRows
+          .slice()
+          .sort((a, b) => a.row.variantId.localeCompare(b.row.variantId))
+          .map(({ row, variant, qty, price }) => ({
+          variant_id: row.variantId,
+          qty,
+          platform,
+          sale_date: saleDate,
+          revenue: price * qty,
+          cost_price_at_sale: variant!.cost_price,
+        })),
+      });
+      if (error) throw error;
       toast.success(`${validRows.length} sale${validRows.length !== 1 ? 's' : ''} logged · ${totalUnits} units · ${formatIDR(totalRevenue)}`);
       setRows([newRow()]);
       onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err.message);
+      if (err?.message?.includes('Insufficient stock')) {
+        toast.error('No sales were saved — one or more rows exceed available stock. Refresh and try again.');
+      } else {
+        toast.error(`No sales were saved — the batch failed: ${parseSupabaseError(err)}`);
+      }
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
@@ -257,7 +269,7 @@ export function BulkLogSaleModal({ open, onClose, onSuccess, products }: Props) 
               </div>
               <Button
                 onClick={handleSubmit}
-                disabled={loading || validRows.length === 0}
+                disabled={loading || validRows.length === 0 || hasOversell}
                 className="w-full h-10 font-semibold text-white bg-primary hover:bg-primary/90 shadow-sm"
               >
                 {loading

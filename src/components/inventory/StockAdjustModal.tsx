@@ -10,6 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
+import { parseSupabaseError } from '@/lib/errors';
 import { toast } from 'sonner';
 import { Loader2, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { ProductVariant } from '@/types';
@@ -64,7 +65,7 @@ export function StockAdjustModal({ variant, productName, initialType = 'in', onC
       onSuccess();
       handleClose();
     } catch (error: any) {
-      toast.error('Failed to adjust stock: ' + error.message);
+      toast.error('Failed to adjust stock: ' + parseSupabaseError(error));
     } finally {
       setLoading(false);
     }

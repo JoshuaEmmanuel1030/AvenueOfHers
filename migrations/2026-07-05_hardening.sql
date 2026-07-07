@@ -1,83 +1,91 @@
--- Run this in Supabase SQL Editor.
--- If you ran the old schema, run the DROP statements first.
-
 -- ============================================================
--- MIGRATION (run this block ONLY if you already have data and
--- want to add Catalogue support without wiping the DB):
--- ============================================================
--- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS collection TEXT;
--- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS available_sizes TEXT[] NOT NULL DEFAULT '{}';
--- ALTER TABLE public.products ADD COLUMN IF NOT EXISTS available_colors TEXT[] NOT NULL DEFAULT '{}';
+-- 2026-07-05 hardening migration — Avenue of Hers
+-- Idempotent: safe to re-run. Paste into the Supabase SQL Editor.
+-- NOTE: the SQL Editor auto-commits per Run — no BEGIN/COMMIT here.
+-- Run the commented PRECHECK queries first; fix any rows they
+-- return before applying the corresponding change.
 -- ============================================================
 
-DROP TABLE IF EXISTS public.stock_movements;
-DROP TABLE IF EXISTS public.sales;
-DROP TABLE IF EXISTS public.product_variants;
-DROP TABLE IF EXISTS public.products;
+-- ------------------------------------------------------------
+-- 1. sales.cost_price_at_sale — used by log_sale and the app,
+--    but was missing from the original DDL.
+-- ------------------------------------------------------------
+ALTER TABLE public.sales
+  ADD COLUMN IF NOT EXISTS cost_price_at_sale NUMERIC NOT NULL DEFAULT 0;
 
--- Products table — represents a style/design (e.g. "Floral Midi Dress")
--- Catalogue-defined: available_sizes/colors constrain what variants can exist
-CREATE TABLE public.products (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    category TEXT,
-    description TEXT,
-    collection TEXT,
-    available_sizes TEXT[] NOT NULL DEFAULT '{}',
-    available_colors TEXT[] NOT NULL DEFAULT '{}',
-    is_archived BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+-- ------------------------------------------------------------
+-- 2. Widen sales.platform CHECK to include 'Instagram'
+--    (stock_movements already allows it; UI keeps Instagram).
+-- ------------------------------------------------------------
+ALTER TABLE public.sales DROP CONSTRAINT IF EXISTS sales_platform_check;
+ALTER TABLE public.sales
+  ADD CONSTRAINT sales_platform_check
+  CHECK (platform IN ('Shopee', 'TikTok', 'Instagram', 'Other'));
 
--- Variants table — each size/color combination with its own cost, price, and stock
-CREATE TABLE public.product_variants (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    product_id UUID REFERENCES public.products(id) ON DELETE CASCADE NOT NULL,
-    size TEXT NOT NULL,
-    color TEXT NOT NULL,
-    sku TEXT NOT NULL UNIQUE,
-    cost_price NUMERIC NOT NULL DEFAULT 0,
-    sell_price NUMERIC NOT NULL DEFAULT 0,
-    stock_qty INTEGER NOT NULL DEFAULT 0 CHECK (stock_qty >= 0),
-    reorder_threshold INTEGER NOT NULL DEFAULT 5,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    UNIQUE (product_id, size, color)
-);
+-- ------------------------------------------------------------
+-- 3. Non-negative stock guard on product_variants.stock_qty.
+--    PRECHECK: existing negative rows will block adding the CHECK.
+--    Detect them first:
+--      SELECT id, sku, stock_qty FROM public.product_variants WHERE stock_qty < 0;
+--    Optional fix (review before running — this zeroes negatives):
+--      -- UPDATE public.product_variants SET stock_qty = 0 WHERE stock_qty < 0;
+-- ------------------------------------------------------------
+ALTER TABLE public.product_variants DROP CONSTRAINT IF EXISTS product_variants_stock_qty_check;
+ALTER TABLE public.product_variants
+  ADD CONSTRAINT product_variants_stock_qty_check CHECK (stock_qty >= 0);
 
--- Sales table — references a specific variant, not just a product
--- ON DELETE RESTRICT prevents deleting a variant that has sales history
-CREATE TABLE public.sales (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    variant_id UUID REFERENCES public.product_variants(id) ON DELETE RESTRICT NOT NULL,
-    qty INTEGER NOT NULL,
-    platform TEXT NOT NULL CHECK (platform IN ('Shopee', 'TikTok', 'Instagram', 'Other')),
-    sale_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    revenue NUMERIC NOT NULL,
-    cost_price_at_sale NUMERIC NOT NULL DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+-- ------------------------------------------------------------
+-- 5. Uniqueness constraints.
+--    PRECHECK: existing duplicates will block these ALTERs.
+--    Detect duplicate variants:
+--      SELECT product_id, size, color, COUNT(*) FROM public.product_variants
+--      GROUP BY product_id, size, color HAVING COUNT(*) > 1;
+--    Detect duplicate product names:
+--      SELECT name, COUNT(*) FROM public.products
+--      GROUP BY name HAVING COUNT(*) > 1;
+--    Merge/rename any duplicates before running the ALTERs below.
+-- ------------------------------------------------------------
+ALTER TABLE public.product_variants DROP CONSTRAINT IF EXISTS product_variants_product_id_size_color_key;
+ALTER TABLE public.product_variants
+  ADD CONSTRAINT product_variants_product_id_size_color_key UNIQUE (product_id, size, color);
 
--- RLS
--- Stock movement audit log
-CREATE TABLE public.stock_movements (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    variant_id UUID REFERENCES public.product_variants(id) ON DELETE RESTRICT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('in', 'out')),
-    qty INTEGER NOT NULL,
-    platform TEXT CHECK (platform IN ('Shopee', 'TikTok', 'Instagram', 'Manual')),
-    note TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_name_key;
+ALTER TABLE public.products
+  ADD CONSTRAINT products_name_key UNIQUE (name);
 
-ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.product_variants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
+-- ------------------------------------------------------------
+-- 6. Enable RLS on stock_movements (policy existed, RLS did not).
+--    Defensively (re)create the policy first: on a DB missing it,
+--    enabling RLS without any policy would block ALL access.
+--    (CREATE POLICY has no IF NOT EXISTS, hence the DO block.)
+-- ------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'stock_movements'
+      AND policyname = 'Public full access on stock_movements'
+  ) THEN
+    CREATE POLICY "Public full access on stock_movements"
+      ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
+  END IF;
+END;
+$$;
 ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public full access on products" ON public.products FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on product_variants" ON public.product_variants FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on sales" ON public.sales FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public full access on stock_movements" ON public.stock_movements FOR ALL USING (true) WITH CHECK (true);
+-- ------------------------------------------------------------
+-- 7. stock_movements.variant_id FK: CASCADE → RESTRICT so deleting
+--    a variant can no longer silently erase its audit trail.
+-- ------------------------------------------------------------
+ALTER TABLE public.stock_movements DROP CONSTRAINT IF EXISTS stock_movements_variant_id_fkey;
+ALTER TABLE public.stock_movements
+  ADD CONSTRAINT stock_movements_variant_id_fkey
+  FOREIGN KEY (variant_id) REFERENCES public.product_variants(id) ON DELETE RESTRICT;
+
+-- ------------------------------------------------------------
+-- 3 (function part) + 4. Rebuild log_sale with an insufficient-stock
+-- guard, and cancel_sale with an audit-trail stock movement.
+-- ------------------------------------------------------------
 
 -- Atomic sale logging: inserts sale + decrements stock + records stock movement in one transaction
 CREATE OR REPLACE FUNCTION log_sale(
@@ -122,24 +130,12 @@ BEGIN
 END;
 $$;
 
--- Atomic stock adjustment: inserts movement + updates stock in one transaction
-CREATE OR REPLACE FUNCTION adjust_stock(
-  p_variant_id UUID, p_type TEXT, p_qty INTEGER, p_platform TEXT, p_note TEXT
-)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
-BEGIN
-  INSERT INTO public.stock_movements (variant_id, type, qty, platform, note)
-  VALUES (p_variant_id, p_type, p_qty, p_platform, p_note);
-  IF p_type = 'in' THEN
-    UPDATE public.product_variants SET stock_qty = stock_qty + p_qty WHERE id = p_variant_id;
-  ELSE
-    UPDATE public.product_variants SET stock_qty = stock_qty - p_qty WHERE id = p_variant_id;
-  END IF;
-END;
-$$;
+-- ------------------------------------------------------------
+-- 8. Batch RPCs — all-or-nothing (a plpgsql function body runs in
+--    a single transaction; any RAISE rolls back the whole batch).
+-- ------------------------------------------------------------
 
 -- Batch sale logging: applies log_sale logic to a jsonb array of sales.
--- All-or-nothing: any failure raises and rolls back the whole batch.
 -- p_sales: jsonb array of {variant_id uuid, qty int, platform text,
 --          sale_date date, revenue numeric, cost_price_at_sale numeric}
 CREATE OR REPLACE FUNCTION log_sale_batch(p_sales jsonb)
@@ -183,7 +179,6 @@ END;
 $$;
 
 -- Batch stock adjustment: applies adjust_stock logic to a jsonb array.
--- All-or-nothing: any failure raises and rolls back the whole batch.
 -- p_adjustments: jsonb array of {variant_id uuid, type text, qty int,
 --                note text, platform text|null}
 CREATE OR REPLACE FUNCTION adjust_stock_batch(p_adjustments jsonb)

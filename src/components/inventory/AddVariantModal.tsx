@@ -83,29 +83,63 @@ export function AddVariantModal({ product, existingVariantCount, onClose, onSucc
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading || !product) return;
-    if (variants.some(v => !v.size || !v.color || !v.sku)) {
+    const trimmed = variants.map(v => ({
+      ...v,
+      size: v.size.trim(),
+      color: v.color.trim(),
+      sku: v.sku.trim(),
+    }));
+    if (trimmed.some(v => !v.size || !v.color || !v.sku)) {
       toast.error('Each variant must have a size, color, and SKU.');
       return;
     }
 
     setLoading(true);
     try {
-      const { error } = await supabase
+      // Insert with stock_qty: 0 — initial stock is applied via adjust_stock
+      // below so the counter and the stock_movements ledger agree.
+      const { data: inserted, error } = await supabase
         .from('product_variants')
-        .insert(variants.map(v => ({
+        .insert(trimmed.map(v => ({
           product_id: product.id,
           size: v.size,
           color: v.color,
           sku: v.sku,
           cost_price: parseFloat(stripCommas(v.cost_price)) || 0,
           sell_price: parseFloat(stripCommas(v.sell_price)) || 0,
-          stock_qty: parseInt(v.stock_qty) || 0,
+          stock_qty: 0,
           reorder_threshold: parseInt(v.reorder_threshold) || 5,
-        })));
+        })))
+        .select('id, sku');
 
       if (error) throw error;
 
-      toast.success(`${variants.length} variant${variants.length > 1 ? 's' : ''} added to ${product.name}.`);
+      const unloggedSkus: string[] = [];
+      for (const v of trimmed) {
+        const initialQty = parseInt(v.stock_qty) || 0;
+        if (initialQty <= 0) continue;
+        const insertedRow = inserted?.find(row => row.sku === v.sku);
+        if (!insertedRow) {
+          unloggedSkus.push(v.sku);
+          continue;
+        }
+        const { error: stockError } = await supabase.rpc('adjust_stock', {
+          p_variant_id: insertedRow.id,
+          p_type: 'in',
+          p_qty: initialQty,
+          p_platform: 'Manual',
+          p_note: 'Initial stock',
+        });
+        if (stockError) unloggedSkus.push(v.sku);
+      }
+
+      if (unloggedSkus.length > 0) {
+        toast.error(
+          `Variant${unloggedSkus.length > 1 ? 's were' : ' was'} created, but initial stock could not be logged for ${unloggedSkus.join(', ')}. Use Stock In to set the quantity.`
+        );
+      } else {
+        toast.success(`${trimmed.length} variant${trimmed.length > 1 ? 's' : ''} added to ${product.name}.`);
+      }
       onSuccess();
       handleClose();
     } catch (error: any) {

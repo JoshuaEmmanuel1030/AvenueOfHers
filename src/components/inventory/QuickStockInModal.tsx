@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogFooter, DialogDescription
@@ -35,11 +35,14 @@ export function QuickStockInModal({ open, products, onClose, onSuccess }: QuickS
     [products, productId]
   );
 
-  // Sizes: prefer Catalogue definition, fallback to sizes that exist in variants
+  // Sizes: union of Catalogue definition and sizes that exist in variants —
+  // a size removed from the Catalogue must stay reachable while variants of it still exist.
   const availableSizes = useMemo(() => {
     if (!selectedProduct) return [];
-    if (selectedProduct.available_sizes?.length) return selectedProduct.available_sizes;
-    return [...new Set(selectedProduct.product_variants.map(v => v.size))].sort();
+    return [...new Set([
+      ...(selectedProduct.available_sizes ?? []),
+      ...selectedProduct.product_variants.map(v => v.size),
+    ])].sort();
   }, [selectedProduct]);
 
   // Colors: filtered by selected size if possible, else full product color list
@@ -55,10 +58,20 @@ export function QuickStockInModal({ open, products, onClose, onSuccess }: QuickS
     return [...new Set(selectedProduct.product_variants.map(v => v.color))].sort();
   }, [selectedProduct, size]);
 
-  const matchedVariant = useMemo(() => {
-    if (!selectedProduct || !size || !color) return null;
-    return selectedProduct.product_variants.find(v => v.size === size && v.color === color) ?? null;
+  const matchingVariants = useMemo(() => {
+    if (!selectedProduct || !size || !color) return [];
+    return selectedProduct.product_variants.filter(v => v.size === size && v.color === color);
   }, [selectedProduct, size, color]);
+
+  // If duplicates exist for this size/color, don't silently pick one.
+  const hasDuplicates = matchingVariants.length > 1;
+  const matchedVariant = hasDuplicates ? null : matchingVariants[0] ?? null;
+
+  useEffect(() => {
+    if (hasDuplicates) {
+      toast.error(`Duplicate variants exist for ${size} / ${color}. Merge or fix them in Inventory before stocking in.`);
+    }
+  }, [hasDuplicates, size, color]);
 
   const handleProductChange = (val: string) => {
     setProductId(val);
@@ -112,7 +125,7 @@ export function QuickStockInModal({ open, products, onClose, onSuccess }: QuickS
     onClose();
   };
 
-  const variantMissing = productId && size && color && !matchedVariant;
+  const variantMissing = productId && size && color && matchingVariants.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

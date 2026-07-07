@@ -31,7 +31,7 @@ export interface Sale {
   id: string;
   variant_id: string;
   qty: number;
-  platform: 'Shopee' | 'TikTok' | 'Other';
+  platform: 'Shopee' | 'TikTok' | 'Instagram' | 'Other';
   sale_date: string;
   revenue: number;
   cost_price_at_sale: number;

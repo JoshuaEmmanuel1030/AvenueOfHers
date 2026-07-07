@@ -21,7 +21,7 @@ import { ProductWithVariants } from '@/types';
 const formatIDR = (amount: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(amount);
 
-export function FinancialsPage({ onSaleLogged }: { onSaleLogged?: () => void }) {
+export function FinancialsPage({ dataVersion, onSaleLogged }: { dataVersion?: number; onSaleLogged?: () => void }) {
   const [sales, setSales] = useState<SaleWithVariant[]>([]);
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,8 @@ export function FinancialsPage({ onSaleLogged }: { onSaleLogged?: () => void }) 
     setLoading(true);
     try {
       const [salesRes, productsRes] = await Promise.all([
-        supabase.from('sales').select('*, product_variants(*, products(*))').order('sale_date', { ascending: false }),
+        // Cap unbounded fetch; proper pagination is the eventual fix
+        supabase.from('sales').select('*, product_variants(*, products(*))').order('sale_date', { ascending: false }).limit(1000),
         supabase.from('products').select('*, product_variants(*)').eq('is_archived', false).order('name'),
       ]);
       if (salesRes.error) throw salesRes.error;
@@ -50,7 +51,7 @@ export function FinancialsPage({ onSaleLogged }: { onSaleLogged?: () => void }) 
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [dataVersion]);
 
   const handleCancelSale = async (saleId: string) => {
     setCancelLoading(true);
@@ -70,7 +71,9 @@ export function FinancialsPage({ onSaleLogged }: { onSaleLogged?: () => void }) 
   const now = new Date();
   const periodCutoff = period === 'month' ? startOfMonth(now) : period === 'week' ? startOfWeek(now, { weekStartsOn: 1 }) : null;
   const periodSales = periodCutoff
-    ? sales.filter(s => new Date(s.sale_date) >= periodCutoff)
+    // sale_date is a date-only string; appending T00:00:00 parses it as LOCAL midnight
+    // (bare 'YYYY-MM-DD' parses as UTC midnight, shifting the day in western timezones)
+    ? sales.filter(s => new Date(s.sale_date + 'T00:00:00') >= periodCutoff)
     : sales;
   const displayedSales = platformFilter === 'all'
     ? periodSales
@@ -160,6 +163,8 @@ export function FinancialsPage({ onSaleLogged }: { onSaleLogged?: () => void }) 
           )}
         </div>
 
+        {/* Desktop table */}
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-slate-50 border-border">
@@ -274,6 +279,87 @@ export function FinancialsPage({ onSaleLogged }: { onSaleLogged?: () => void }) 
             )}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden divide-y divide-border">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="p-4 animate-pulse space-y-2">
+                <div className="h-4 w-36 bg-slate-100 rounded" />
+                <div className="h-3 w-24 bg-slate-100 rounded" />
+              </div>
+            ))
+          ) : displayedSales.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center gap-3 text-slate-400">
+              <History size={36} className="opacity-20" />
+              <p>{sales.length === 0 ? 'No sales logged yet.' : `No sales in ${PERIODS.find(p => p.key === period)?.label.toLowerCase()}.`}</p>
+            </div>
+          ) : (
+            displayedSales.map(sale => {
+              const variant = sale.product_variants;
+              const product = variant?.products;
+              const cogs = sale.cost_price_at_sale * sale.qty;
+              const m = sale.revenue > 0 ? ((sale.revenue - cogs) / sale.revenue) * 100 : 0;
+              return (
+                <div key={sale.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-800 truncate">{product?.name ?? '—'}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {variant ? `${variant.size} / ${variant.color}` : '—'} · Qty {sale.qty}
+                      </p>
+                    </div>
+                    <p className="font-bold text-slate-800 shrink-0">{formatIDR(sale.revenue)}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">{format(new Date(sale.sale_date), 'MMM d, yyyy')}</span>
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full font-bold uppercase border',
+                        sale.platform === 'Shopee' && 'bg-orange-50 text-orange-700 border-orange-100',
+                        sale.platform === 'TikTok' && 'bg-slate-900 text-white border-slate-900',
+                        sale.platform === 'Instagram' && 'bg-pink-50 text-pink-700 border-pink-100',
+                        sale.platform === 'Other' && 'bg-blue-50 text-blue-700 border-blue-100'
+                      )}>
+                        {sale.platform}
+                      </span>
+                    </div>
+                    <span className={cn('font-bold', m >= 40 ? 'text-emerald-600' : m >= 20 ? 'text-amber-600' : 'text-rose-500')}>
+                      {m.toFixed(1)}%
+                    </span>
+                  </div>
+                  {cancellingId === sale.id ? (
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <span className="text-[11px] text-slate-500 mr-1">Reverse sale?</span>
+                      <button
+                        onClick={() => handleCancelSale(sale.id)}
+                        disabled={cancelLoading}
+                        className="px-2 py-0.5 text-[11px] font-bold rounded bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+                      >
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => setCancellingId(null)}
+                        disabled={cancelLoading}
+                        className="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setCancellingId(sale.id)}
+                      className="flex items-center gap-1 text-[11px] text-rose-500 pt-1"
+                    >
+                      <Trash2 size={13} /> Reverse
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
       <LogSaleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={() => { fetchAll(); onSaleLogged?.(); }} />

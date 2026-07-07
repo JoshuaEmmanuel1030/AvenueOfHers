@@ -17,7 +17,7 @@ import { PlatformBreakdownCard } from '@/components/insights/PlatformBreakdownCa
 import { StockMovementTrendCard } from '@/components/insights/StockMovementTrendCard';
 import { BulkStockModal } from '@/components/inventory/BulkStockModal';
 
-export function InsightsPage({ dataVersion = 0 }: { dataVersion?: number }) {
+export function InsightsPage({ dataVersion = 0, onDataChanged }: { dataVersion?: number; onDataChanged?: () => void }) {
   const [products, setProducts] = useState<ProductWithVariants[]>([]);
   const [sales, setSales] = useState<SaleWithVariant[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -29,8 +29,9 @@ export function InsightsPage({ dataVersion = 0 }: { dataVersion?: number }) {
     try {
       const [productsRes, salesRes, movementsRes] = await Promise.all([
         supabase.from('products').select('*, product_variants(*)').eq('is_archived', false),
-        supabase.from('sales').select('*, product_variants(*, products(*))').order('created_at', { ascending: false }),
-        supabase.from('stock_movements').select('*').order('created_at', { ascending: false }),
+        // Capped like Financials/StockHistory; pagination is the eventual fix
+        supabase.from('sales').select('*, product_variants(*, products(*))').order('created_at', { ascending: false }).limit(1000),
+        supabase.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(1000),
       ]);
 
       if (productsRes.error) throw productsRes.error;
@@ -91,7 +92,7 @@ export function InsightsPage({ dataVersion = 0 }: { dataVersion?: number }) {
       <BulkStockModal
         open={restockOpen}
         onClose={() => setRestockOpen(false)}
-        onSuccess={fetchAll}
+        onSuccess={() => { fetchAll(); onDataChanged?.(); }}
         products={products}
         initialType="in"
       />

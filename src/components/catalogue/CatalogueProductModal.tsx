@@ -84,8 +84,8 @@ export function CatalogueProductModal({ open, product, onClose, onSuccess }: Cat
         category: category.trim() || null,
         collection: collection.trim() || null,
         description: description.trim() || null,
-        available_sizes: sizes,
-        available_colors: colors,
+        available_sizes: sizes.map(s => s.trim()).filter(Boolean),
+        available_colors: colors.map(c => c.trim()).filter(Boolean),
       };
 
       if (product) {

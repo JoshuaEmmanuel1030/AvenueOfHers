@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from '@/components/ui/dialog';
@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Loader2, ChevronsUpDown, Check, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { ProductWithVariants, ProductVariant } from '@/types';
 import { cn } from '@/lib/utils';
+import { parseSupabaseError } from '@/lib/errors';
 
 type FlatVariant = ProductVariant & { productName: string };
 
@@ -39,6 +40,7 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
   const [supplier, setSupplier] = useState('');
   const [rows, setRows] = useState<BulkRow[]>([newRow()]);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   const allVariants: FlatVariant[] = products.flatMap(p =>
     p.product_variants.map(v => ({ ...v, productName: p.name }))
@@ -72,32 +74,48 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
 
   const totalUnits = validRows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0);
 
+  // Stock-out rows that exceed available stock would fail the DB CHECK — block them up front.
+  const hasOversell = type === 'out' && validRows.some(r => {
+    const v = allVariants.find(v => v.id === r.variantId);
+    return !!v && parseInt(r.qty) > v.stock_qty;
+  });
+
   const handleSubmit = async () => {
-    if (loading) return;
+    if (submittingRef.current || loading) return;
     if (validRows.length === 0) { toast.error('Add at least one variant with a quantity.'); return; }
+    submittingRef.current = true;
     setLoading(true);
     try {
-      const platformValue = type === 'in' ? (supplier.trim() || null) : platform;
-      const results = await Promise.all(
-        validRows.map(row =>
-          supabase.rpc('adjust_stock', {
-            p_variant_id: row.variantId,
-            p_type: type,
-            p_qty: parseInt(row.qty),
-            p_platform: platformValue,
-            p_note: row.note || null,
-          })
-        )
-      );
-      const firstFailed = results.find(r => r.error);
-      if (firstFailed?.error) throw firstFailed.error;
+      // Supplier is free text — it can't go in `platform` (CHECK constraint allows
+      // only Shopee/TikTok/Instagram/Manual), so fold it into the note instead.
+      const supplierText = type === 'in' ? supplier.trim() : '';
+      const platformValue = type === 'in' ? 'Manual' : platform;
+      // Sort by variant_id so concurrent batches lock rows in the same order (deadlock avoidance).
+      const { error } = await supabase.rpc('adjust_stock_batch', {
+        p_adjustments: validRows
+          .slice()
+          .sort((a, b) => a.variantId.localeCompare(b.variantId))
+          .map(row => ({
+            variant_id: row.variantId,
+            type,
+            qty: parseInt(row.qty),
+            note: [row.note, supplierText].filter(Boolean).join(' — ') || null,
+            platform: platformValue,
+          })),
+      });
+      if (error) throw error;
       toast.success(`${validRows.length} movement${validRows.length !== 1 ? 's' : ''} recorded · ${totalUnits} units ${type === 'in' ? 'added' : 'removed'}`);
       setRows([newRow()]);
       onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err.message);
+      if (err?.message?.includes('Insufficient stock')) {
+        toast.error('No movements were recorded — one or more rows exceed available stock. Refresh and try again.');
+      } else {
+        toast.error(`No movements were recorded — the batch failed: ${parseSupabaseError(err)}`);
+      }
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
@@ -283,7 +301,7 @@ export function BulkStockModal({ open, onClose, onSuccess, products, initialType
               </div>
               <Button
                 onClick={handleSubmit}
-                disabled={loading || validRows.length === 0}
+                disabled={loading || validRows.length === 0 || hasOversell}
                 className={cn(
                   'w-full h-10 font-semibold text-white shadow-sm',
                   type === 'in' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-rose-500 hover:bg-rose-600'
