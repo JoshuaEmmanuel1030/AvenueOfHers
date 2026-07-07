@@ -6,6 +6,7 @@ import { FinancialsPage } from '@/pages/Financials';
 import { StockHistoryPage } from '@/pages/StockHistory';
 import { InsightsPage } from '@/pages/Insights';
 import { KPIPage } from '@/pages/KPI';
+import { InventoryAssistant } from '@/components/assistant/InventoryAssistant';
 import { Toaster } from '@/components/ui/sonner';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { AlertCircle, Menu, X } from 'lucide-react';
@@ -90,13 +91,14 @@ export default function App() {
           {/* Pages stay mounted after first visit — no refetch on every tab switch */}
           <div className={activeTab !== 'catalogue' ? 'hidden' : ''}><CataloguePage dataVersion={dataVersion} onCatalogueChanged={notifyDataChange} /></div>
           <div className={activeTab !== 'inventory' ? 'hidden' : ''}><InventoryPage dataVersion={dataVersion} onStockChanged={notifyDataChange} /></div>
-          <div className={activeTab !== 'financials' ? 'hidden' : ''}><FinancialsPage onSaleLogged={notifyDataChange} /></div>
-          <div className={activeTab !== 'stock-history' ? 'hidden' : ''}><StockHistoryPage /></div>
-          <div className={activeTab !== 'insights' ? 'hidden' : ''}><InsightsPage dataVersion={dataVersion} /></div>
+          <div className={activeTab !== 'financials' ? 'hidden' : ''}><FinancialsPage dataVersion={dataVersion} onSaleLogged={notifyDataChange} /></div>
+          <div className={activeTab !== 'stock-history' ? 'hidden' : ''}><StockHistoryPage dataVersion={dataVersion} /></div>
+          <div className={activeTab !== 'insights' ? 'hidden' : ''}><InsightsPage dataVersion={dataVersion} onDataChanged={notifyDataChange} /></div>
           <div className={activeTab !== 'kpi' ? 'hidden' : ''}><KPIPage /></div>
         </div>
       </main>
 
+      <InventoryAssistant />
       <Toaster position="top-right" />
     </div>
   );
